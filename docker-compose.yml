@@ -1,0 +1,369 @@
+version: '3.8'
+
+# ============================================================
+#  T11 - Identificación y Pixelado de Rostros
+#  Arquitectura Event-Driven con Kafka
+# ============================================================
+
+networks:
+  bda-net:
+    driver: bridge
+
+volumes:
+  minio-data:
+  postgres-data:
+  kafka-data:
+  zookeeper-data:
+
+services:
+
+  # ──────────────────────────────────────────
+  # ZOOKEEPER  (requerido por Kafka)
+  # ──────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+    networks:
+      - bda-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────
+  # KAFKA  (bus de eventos principal)
+  # ──────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"       # acceso externo (host)
+      - "29092:29092"     # acceso interno (entre contenedores)
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 24
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - bda-net
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ──────────────────────────────────────────
+  # KAFKA UI  (consola web para inspeccionar topics)
+  # http://localhost:8090
+  # ──────────────────────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - bda-net
+
+  # ──────────────────────────────────────────
+  # KAFKA INIT  (crea los topics al arrancar)
+  # ──────────────────────────────────────────
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - bda-net
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      echo 'Esperando a que Kafka esté listo...'
+      sleep 10
+
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic images.raw            --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic images.faces_detected --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic images.age_estimated  --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic images.processed      --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.face_detection    --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.age_detection     --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.pixelation        --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.storage           --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic events.dead_letter    --partitions 1 --replication-factor 1
+
+      echo 'Topics creados correctamente.'
+      kafka-topics --bootstrap-server kafka:29092 --list
+      "
+
+  # ──────────────────────────────────────────
+  # POSTGRESQL  (base de datos relacional)
+  # Tablas: Solicitud, Imagenes
+  # ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: bda_imagenes
+      POSTGRES_USER: bda_user
+      POSTGRES_PASSWORD: bda_pass
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - bda-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bda_user -d bda_imagenes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────
+  # MINIO  (almacenamiento compatible S3)
+  # Consola web: http://localhost:9001
+  # API:         http://localhost:9000
+  # ──────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Consola web
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - bda-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────
+  # MINIO INIT  (crea el bucket inicial)
+  # ──────────────────────────────────────────
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - bda-net
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      mc alias set local http://minio:9000 minioadmin minioadmin123
+      mc mb --ignore-existing local/imagenes-raw
+      mc mb --ignore-existing local/imagenes-procesadas
+      echo 'Buckets de MinIO creados.'
+      "
+
+  # ──────────────────────────────────────────
+  # API GATEWAY  (entrada HTTP + consulta resultados)
+  # http://localhost:8000
+  # ──────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_RAW: images.raw
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET_RAW: imagenes-raw
+      MINIO_BUCKET_PROCESSED: imagenes-procesadas
+      DATABASE_URL: postgresql://bda_user:bda_pass@postgres:5432/bda_imagenes
+    networks:
+      - bda-net
+
+  # ──────────────────────────────────────────
+  # ORQUESTADOR  (coordina el pipeline)
+  # ──────────────────────────────────────────
+  orchestrator:
+    build:
+      context: ./services/orchestrator
+      dockerfile: Dockerfile
+    container_name: orchestrator
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONSUMER_GROUP: orchestrator-group
+      TOPICS_IN: images.raw,images.faces_detected,images.age_estimated,images.processed
+      TOPIC_CMD_FACE: cmd.face_detection
+      TOPIC_CMD_AGE: cmd.age_detection
+      TOPIC_CMD_PIXELATION: cmd.pixelation
+      TOPIC_CMD_STORAGE: cmd.storage
+      TOPIC_DEAD_LETTER: events.dead_letter
+      DATABASE_URL: postgresql://bda_user:bda_pass@postgres:5432/bda_imagenes
+    networks:
+      - bda-net
+
+  # ──────────────────────────────────────────
+  # FACE DETECTION SERVICE
+  # Consume: cmd.face_detection
+  # Produce: images.faces_detected
+  # ──────────────────────────────────────────
+  face-detection:
+    build:
+      context: ./services/face-detection
+      dockerfile: Dockerfile
+    container_name: face-detection
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONSUMER_GROUP: face-detection-group
+      TOPIC_IN: cmd.face_detection
+      TOPIC_OUT: images.faces_detected
+      TOPIC_DEAD_LETTER: events.dead_letter
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET_RAW: imagenes-raw
+    networks:
+      - bda-net
+
+  # ──────────────────────────────────────────
+  # AGE DETECTION SERVICE
+  # Consume: cmd.age_detection
+  # Produce: images.age_estimated
+  # ──────────────────────────────────────────
+  age-detection:
+    build:
+      context: ./services/age-detection
+      dockerfile: Dockerfile
+    container_name: age-detection
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONSUMER_GROUP: age-detection-group
+      TOPIC_IN: cmd.age_detection
+      TOPIC_OUT: images.age_estimated
+      TOPIC_DEAD_LETTER: events.dead_letter
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET_RAW: imagenes-raw
+    networks:
+      - bda-net
+
+  # ──────────────────────────────────────────
+  # PIXELATION SERVICE
+  # Consume: cmd.pixelation
+  # Produce: images.processed
+  # ──────────────────────────────────────────
+  pixelation:
+    build:
+      context: ./services/pixelation
+      dockerfile: Dockerfile
+    container_name: pixelation
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONSUMER_GROUP: pixelation-group
+      TOPIC_IN: cmd.pixelation
+      TOPIC_OUT: images.processed
+      TOPIC_DEAD_LETTER: events.dead_letter
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET_RAW: imagenes-raw
+      MINIO_BUCKET_PROCESSED: imagenes-procesadas
+    networks:
+      - bda-net
+
+  # ──────────────────────────────────────────
+  # STORAGE / RESULT SERVICE
+  # Consume: cmd.storage
+  # Guarda metadatos en BD y mueve imagen a bucket final
+  # ──────────────────────────────────────────
+  storage-service:
+    build:
+      context: ./services/storage-service
+      dockerfile: Dockerfile
+    container_name: storage-service
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONSUMER_GROUP: storage-group
+      TOPIC_IN: cmd.storage
+      TOPIC_DEAD_LETTER: events.dead_letter
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET_PROCESSED: imagenes-procesadas
+      DATABASE_URL: postgresql://bda_user:bda_pass@postgres:5432/bda_imagenes
+    networks:
+      - bda-net
