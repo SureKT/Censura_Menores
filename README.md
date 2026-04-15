@@ -11,22 +11,19 @@ Implementar un pipeline de microservicios basado en Kafka que:
 - pixelice solo los menores,
 - y almacene el resultado final con trazabilidad del proceso.
 
-## Arquitectura del proyecto
+## Arquitectura del proyecto (fase simplificada)
 
-El sistema se apoya en contenedores Docker y comunicacion asincrona mediante topics de Kafka.
+Para priorizar funcionalidad y sencillez, la fase actual usa solo infraestructura base:
 
-Servicios principales:
-- `api-gateway`: entrada HTTP para subir imagenes y consultar resultados.
-- `orchestrator`: coordina el flujo por estados y publica comandos.
-- `face-detection`: detecta rostros y genera bounding boxes.
-- `age-detection`: estima edad y clasifica menor/mayor de edad.
-- `pixelation`: aplica pixelado a menores.
-- `storage-service`: persiste metadatos en PostgreSQL y guarda resultado en MinIO.
-- `kafka`, `kafka-ui`, `kafka-init`: bus de eventos, consola y bootstrap de topics.
+- `kafka`: bus de eventos (KRaft, sin ZooKeeper).
+- `kafka-init`: creacion automatica de topics al arrancar.
 - `postgres`: persistencia relacional.
-- `minio`, `minio-init`: almacenamiento compatible S3.
+- `minio`: almacenamiento compatible S3.
+- `minio-init`: creacion automatica de buckets.
 
-## Flujo de eventos (pipeline)
+Los microservicios de negocio (`api-gateway`, `orchestrator`, `face-detection`, etc.) se incorporaran despues, de forma incremental.
+
+## Flujo de eventos (referencia funcional)
 
 1. Cliente envia imagen a `api-gateway`.
 2. `api-gateway` publica evento inicial en `images.raw`.
@@ -52,7 +49,7 @@ Servicios principales:
 - `cmd.storage`
 - `events.dead_letter`
 
-## Como ejecutar (Docker Compose)
+## Como ejecutar (Docker Compose minimo)
 
 ### Requisitos
 - Docker Desktop
@@ -60,15 +57,41 @@ Servicios principales:
 
 ### Arranque
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 ### Verificacion rapida
-- API Gateway: `http://localhost:8000`
-- Kafka UI: `http://localhost:8090`
+- Kafka Broker (host): `localhost:9092`
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
 - PostgreSQL: `localhost:5432`
+
+### Operar Kafka por consola/scripts
+Listar topics:
+```bash
+docker exec kafka kafka-topics --bootstrap-server localhost:29092 --list
+```
+
+Consumir mensajes:
+```bash
+docker exec -it kafka kafka-console-consumer --bootstrap-server localhost:29092 --topic images.raw --from-beginning
+```
+
+Publicar mensaje:
+```bash
+docker exec -it kafka kafka-console-producer --bootstrap-server localhost:29092 --topic images.raw
+```
+
+### Smoke test automatizado
+Ejecutar validacion completa de infraestructura:
+```bash
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+```
+
+Si ya tienes los contenedores levantados:
+```bash
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1 -SkipUp
+```
 
 ### Parada
 ```bash
@@ -88,13 +111,8 @@ Proyecto_Imagenes_IA/
   README.md
   db/
     init.sql
-  services/
-    api-gateway/
-    orchestrator/
-    face-detection/
-    age-detection/
-    pixelation/
-    storage-service/
+  contracts/
+    *.schema.json
 ```
 
 ## Guia de desarrollo (equipo)
@@ -105,8 +123,8 @@ Basada en la especificacion del proyecto:
    - division por servicios y responsables;
    - definicion de contratos de eventos (JSON Schema por topic).
 2. **Implementacion**
-   - desarrollo independiente por servicio;
-   - integracion unicamente por eventos (evitar acoplamiento HTTP interno).
+   - empezar por scripts/consumidores simples sobre Kafka;
+   - incorporar microservicios despues, solo cuando la fase de infraestructura este estable.
 3. **Pruebas**
    - unitarias por microservicio;
    - pruebas de integracion con Kafka;
