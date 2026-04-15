@@ -1,0 +1,72 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proyecto-imagenes-ia/contracts/images.faces_detected.v1.schema.json",
+  "title": "images.faces_detected v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event",
+    "payload"
+  ],
+  "properties": {
+    "event": {
+      "allOf": [
+        {
+          "$ref": "./_defs.schema.json#/$defs/eventMetadata"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event_type": {
+              "const": "images.faces_detected"
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bucket",
+        "object_key",
+        "faces"
+      ],
+      "properties": {
+        "bucket": {
+          "type": "string",
+          "minLength": 1
+        },
+        "object_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "faces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "face_id",
+              "bbox"
+            ],
+            "properties": {
+              "face_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "bbox": {
+                "$ref": "./_defs.schema.json#/$defs/boundingBox"
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

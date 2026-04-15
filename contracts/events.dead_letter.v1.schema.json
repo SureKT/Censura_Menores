@@ -1,0 +1,69 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proyecto-imagenes-ia/contracts/events.dead_letter.v1.schema.json",
+  "title": "events.dead_letter v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event",
+    "payload"
+  ],
+  "properties": {
+    "event": {
+      "allOf": [
+        {
+          "$ref": "./_defs.schema.json#/$defs/eventMetadata"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event_type": {
+              "const": "events.dead_letter"
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_topic",
+        "consumer_group",
+        "error_type",
+        "error_message",
+        "failed_at",
+        "original_message"
+      ],
+      "properties": {
+        "original_topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consumer_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error_message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "original_message": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}
