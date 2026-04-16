@@ -1,0 +1,13 @@
+### Health check API Ingesta
+GET http://localhost:8001/health
+
+### Subir imagen al pipeline
+POST http://localhost:8001/images
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test.jpg"
+Content-Type: image/jpeg
+
+< ./test.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--

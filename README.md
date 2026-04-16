@@ -52,6 +52,11 @@ Servicios actualmente implementados en compose:
 - `postgres`: base de datos relacional para metadatos.
 - `minio`: almacenamiento compatible S3 para imagenes.
 - `minio-init`: crea buckets iniciales.
+- `api1`: API de ingesta (sube imagen y publica `images.raw`).
+- `o1`: orquestador de entrada (registra Solicitud y publica `cmd.face_detection`).
+- `face-detection`: consumidor de `cmd.face_detection` que publica `evt.face_detection.completed` (stub inicial).
+- `o2`: orquestador de analisis (actualiza deteccion en BD, inserta `Imagenes` y publica `cmd.age_detection`).
+- `age-detection`: consumidor de `cmd.age_detection` que publica `evt.age_detection.completed` (stub inicial).
 
 Servicios planificados para el pipeline completo:
 - `api-gateway`

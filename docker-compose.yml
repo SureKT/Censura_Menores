@@ -28,7 +28,7 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
@@ -126,3 +126,98 @@ services:
       mc mb --ignore-existing local/imagenes-raw
       mc mb --ignore-existing local/imagenes-procesadas
       "
+
+  api1:
+    build:
+      context: ./api/api1
+      dockerfile: Dockerfile
+    container_name: api1
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_started
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_SECURE: "false"
+      MINIO_RAW_BUCKET: imagenes-raw
+    ports:
+      - "8001:8000"
+    networks:
+      - bda-net
+
+  o1:
+    build:
+      context: ./orquestadores/o1
+      dockerfile: Dockerfile
+    container_name: o1
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: bda_imagenes
+      POSTGRES_USER: bda_user
+      POSTGRES_PASSWORD: bda_pass
+    networks:
+      - bda-net
+
+  face-detection:
+    build:
+      context: ./services/face_detection
+      dockerfile: Dockerfile
+    container_name: face-detection
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - bda-net
+
+  o2:
+    build:
+      context: ./orquestadores/o2
+      dockerfile: Dockerfile
+    container_name: o2
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: bda_imagenes
+      POSTGRES_USER: bda_user
+      POSTGRES_PASSWORD: bda_pass
+    networks:
+      - bda-net
+
+  age-detection:
+    build:
+      context: ./services/age_detection
+      dockerfile: Dockerfile
+    container_name: age-detection
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - bda-net
