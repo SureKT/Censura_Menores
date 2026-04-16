@@ -221,3 +221,59 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     networks:
       - bda-net
+
+  o3:
+    build:
+      context: ./orquestadores/o3
+      dockerfile: Dockerfile
+    container_name: o3
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: bda_imagenes
+      POSTGRES_USER: bda_user
+      POSTGRES_PASSWORD: bda_pass
+    networks:
+      - bda-net
+
+  pixelation:
+    build:
+      context: ./services/pixelation
+      dockerfile: Dockerfile
+    container_name: pixelation
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - bda-net
+
+  o4:
+    build:
+      context: ./orquestadores/o4
+      dockerfile: Dockerfile
+    container_name: o4
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: bda_imagenes
+      POSTGRES_USER: bda_user
+      POSTGRES_PASSWORD: bda_pass
+    networks:
+      - bda-net

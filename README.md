@@ -57,6 +57,9 @@ Servicios actualmente implementados en compose:
 - `face-detection`: consumidor de `cmd.face_detection` que publica `evt.face_detection.completed` (stub inicial).
 - `o2`: orquestador de analisis (actualiza deteccion en BD, inserta `Imagenes` y publica `cmd.age_detection`).
 - `age-detection`: consumidor de `cmd.age_detection` que publica `evt.age_detection.completed` (stub inicial).
+- `o3`: orquestador de decision (clasifica menores/adultos en BD y decide `cmd.pixelation` o `cmd.storage`).
+- `pixelation`: consumidor de `cmd.pixelation` que publica `evt.pixelation.completed` (stub inicial).
+- `o4`: orquestador de finalizacion (consume `evt.pixelation.completed` o `cmd.storage`, marca `COMPLETED` y publica `evt.storage.completed`).
 
 Servicios planificados para el pipeline completo:
 - `api-gateway`
