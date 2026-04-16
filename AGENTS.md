@@ -19,21 +19,43 @@ Guia comun para mantener consistencia entre desarrollo asistido por IA (Cursor, 
 
 ## 3) Convenciones de eventos
 
-- Topics de dominio: `images.*`.
-- Topics de comando: `cmd.*`.
-- Topic de errores no recuperables: `events.dead_letter`.
-- Todo mensaje debe incluir identificadores trazables (`request_id`, `image_id` cuando aplique).
+Topics de ingesta/resultado:
+- `images.raw` — imagen recibida por API Ingesta.
+- `images.faces_detected` — coordenadas de rostros detectados.
+- `images.age_estimated` — edades estimadas por rostro.
+- `images.processed` — imagen final pixelada lista para almacenar.
+
+Topics de eventos de servicio (publicados por servicios IA):
+- `evt.face_detection.completed`
+- `evt.age_detection.completed`
+- `evt.pixelation.completed`
+- `evt.storage.completed`
+
+Topics de comando (publicados por orquestadores):
+- `cmd.face_detection`, `cmd.age_detection`, `cmd.pixelation`, `cmd.storage`.
+
+Topic de errores no recuperables: `events.dead_letter`.
+
+Todo mensaje debe incluir identificadores trazables (`GUID_Solicitud`, `image_id` cuando aplique).
 
 ## 4) Contratos y versionado
 
 - Los contratos JSON Schema se guardan en `contracts/`.
 - Regla: "contract-first" minima (solo contratos necesarios para la fase actual).
 - Cambios breaking requieren version de schema y plan de migracion.
+- Respetar el flujo de fases definido en `Workflow.md`: Ingesta → Analisis → Decision → Finalizacion.
 
 ## 5) Definition of Done (por microservicio)
 
+Servicios del pipeline (ver `Workflow.md` para detalle de cada uno):
+- **APIs**: API Ingesta, API Consulta.
+- **Logica IA**: Face Detection, Age Detection, Pixelation.
+- **Orquestadores**: Orq. Entrada, Orq. Analisis, Orq. Decision, Orq. Finalizacion.
+- **Infraestructura**: Kafka, MinIO, PostgreSQL.
+
 Para considerar una tarea completada:
 - Producer/consumer implementado y operativo.
+- Interaccion con BD correcta (tablas `Solicitud` e `Imagenes` segun fase).
 - Manejo de errores basico + envio a DLQ cuando no se pueda procesar.
 - Logging minimo de entrada, salida y error.
 - Tests minimos (unitarios y/o integracion segun impacto).
