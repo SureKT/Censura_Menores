@@ -1,7 +1,7 @@
-﻿{
+{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://proyecto-imagenes-ia/contracts/images.processed.v1.schema.json",
-  "title": "images.processed v1",
+  "$id": "https://proyecto-imagenes-ia/contracts/evt.storage.completed.v1.schema.json",
+  "title": "evt.storage.completed v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
           "type": "object",
           "properties": {
             "event_type": {
-              "const": "images.processed"
+              "const": "evt.storage.completed"
             }
           }
         }

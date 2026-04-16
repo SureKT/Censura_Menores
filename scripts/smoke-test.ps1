@@ -74,9 +74,10 @@ Wait-ServiceHealthy -ServiceName "minio"
 Write-Step "Verificando topics Kafka"
 $expectedTopics = @(
     "images.raw",
-    "images.faces_detected",
-    "images.age_estimated",
-    "images.processed",
+    "evt.face_detection.completed",
+    "evt.age_detection.completed",
+    "evt.pixelation.completed",
+    "evt.storage.completed",
     "cmd.face_detection",
     "cmd.age_detection",
     "cmd.pixelation",

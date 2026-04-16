@@ -38,7 +38,7 @@ Proyecto_Imagenes_IA/
   contracts/
     _defs.schema.json
     images.raw.v1.schema.json
-    images.processed.v1.schema.json
+    evt.storage.completed.v1.schema.json
     events.dead_letter.v1.schema.json
   scripts/
     smoke-test.ps1
@@ -65,9 +65,10 @@ Servicios planificados para el pipeline completo:
 
 Topics definidos:
 - `images.raw`
-- `images.faces_detected`
-- `images.age_estimated`
-- `images.processed`
+- `evt.face_detection.completed`
+- `evt.age_detection.completed`
+- `evt.pixelation.completed`
+- `evt.storage.completed`
 - `cmd.face_detection`
 - `cmd.age_detection`
 - `cmd.pixelation`
@@ -77,7 +78,7 @@ Topics definidos:
 Flujo de referencia:
 1. Cliente publica imagen via API Gateway hacia `images.raw`.
 2. Orchestrator publica comandos `cmd.*` para cada etapa.
-3. Servicios de proceso publican eventos `images.*`.
+3. Servicios de proceso publican eventos `evt.*.completed`.
 4. Storage persiste resultado y estado final.
 5. Errores no recuperables se envian a `events.dead_letter`.
 
