@@ -40,10 +40,12 @@ def build_storage_event(input_event: dict, pixelation_applied: bool) -> dict:
             "source": APP_NAME,
         },
         "payload": {
-            "input_bucket": payload.get("bucket", "imagenes-raw"),
+            "input_bucket": payload.get("input_bucket", payload.get("bucket", "imagenes-raw")),
             "input_object_key": payload.get("object_key", ""),
-            "output_bucket": "imagenes-procesadas",
-            "output_object_key": payload.get("object_key", ""),
+            "output_bucket": payload.get("output_bucket", "imagenes-procesadas"),
+            "output_object_key": payload.get(
+                "output_object_key", payload.get("object_key", "")
+            ),
             "pixelated_faces_count": payload.get("pixelated_faces_count", 0),
             "total_faces_count": payload.get("total_faces", 0),
             "pixelation_applied": pixelation_applied,
