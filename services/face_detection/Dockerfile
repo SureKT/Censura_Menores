@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Pre-descargar el modelo YOLOv8-face durante el build.
 # Si falla (sin internet), el servicio lo descargara al arrancar.
 RUN wget -q -O /app/yolov8n-face.pt \
-    "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov8n-face.pt" \
+    "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov8n-face.pt" \
     && echo "Modelo YOLOv8-face descargado." \
     || echo "Advertencia: se descargara al arrancar."
 

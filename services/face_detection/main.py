@@ -18,10 +18,13 @@ OUTPUT_TOPIC = "evt.face_detection.completed"
 GROUP_ID = "face-detection-group"
 
 YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "/app/yolov8n-face.pt")
-YOLO_MODEL_URL = (
-    "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov8n-face.pt"
-)
 YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.5"))
+
+# URLs de descarga en orden de preferencia
+YOLO_MODEL_URLS = [
+    "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov8n-face.pt",
+    "https://huggingface.co/arnabdhar/YOLOv8-Face-Detection/resolve/main/model.pt",
+]
 
 
 def create_minio_client() -> Minio:
@@ -35,8 +38,17 @@ def create_minio_client() -> Minio:
 def load_model() -> YOLO:
     if not os.path.exists(YOLO_MODEL_PATH):
         print(f"[face_detection] Descargando modelo YOLOv8-face en {YOLO_MODEL_PATH}...")
-        urllib.request.urlretrieve(YOLO_MODEL_URL, YOLO_MODEL_PATH)
-        print("[face_detection] Modelo descargado.")
+        last_exc = None
+        for url in YOLO_MODEL_URLS:
+            try:
+                urllib.request.urlretrieve(url, YOLO_MODEL_PATH)
+                print(f"[face_detection] Modelo descargado desde {url}")
+                break
+            except Exception as exc:
+                print(f"[face_detection] Fallo en {url}: {exc}")
+                last_exc = exc
+        else:
+            raise RuntimeError(f"No se pudo descargar el modelo YOLO: {last_exc}") from last_exc
     model = YOLO(YOLO_MODEL_PATH)
     print(f"[face_detection] YOLOv8-face cargado (conf={YOLO_CONFIDENCE}).")
     return model

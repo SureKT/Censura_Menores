@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_main.py -v)",
+      "Bash(\"C:/Users/sergi/PycharmProjects/Censura_Menores/.venv/Scripts/python.exe\" -m pytest tests/test_main.py -v)"
+    ]
+  }
+}
