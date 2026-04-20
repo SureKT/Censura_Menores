@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS Solicitud (
-    Id_Solicitud INT PRIMARY KEY,
-    GUID_Solicitud VARCHAR(255),
-    Id_Fichero VARCHAR(255),
+    GUID_Solicitud VARCHAR(255) PRIMARY KEY,
+    URL_Imagen_Original VARCHAR(255),
+    URL_Imagen_Terminada VARCHAR(255),
     Inicio_Solicitud TIMESTAMP,
     Fin_Solicitud TIMESTAMP,
     Inicio_Deteccion_Caras TIMESTAMP,
@@ -12,14 +12,19 @@ CREATE TABLE IF NOT EXISTS Solicitud (
     Fin_Pixelado TIMESTAMP,
     Inicio_Almacenamiento_Solicitud TIMESTAMP,
     Fin_Almacenamiento_Solicitud TIMESTAMP,
-    Num_Imagenes_Total INT,
-    Num_Imagenes_Pixeladas INT,
     Estado VARCHAR(50)
 );
 
 CREATE TABLE IF NOT EXISTS Imagenes (
-    Id_Imagen INT PRIMARY KEY,
-    Id_Solicitud INT,
-    Estado VARCHAR(50),
-    FOREIGN KEY (Id_Solicitud) REFERENCES Solicitud(Id_Solicitud)
+    GUID_Solicitud VARCHAR(255),
+    Id_Imagen INT,
+    URL_Imagen VARCHAR(255),
+    Mayor_18 BOOLEAN,
+    score DECIMAL(5,4),
+    Imagen_X INT,
+    Imagen_Y INT,
+    Imagen_Ancho INT,
+    Imagen_Alto INT,
+    PRIMARY KEY (GUID_Solicitud, Id_Imagen),
+    FOREIGN KEY (GUID_Solicitud) REFERENCES Solicitud(GUID_Solicitud)
 );

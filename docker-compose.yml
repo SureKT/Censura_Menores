@@ -272,6 +272,44 @@ services:
     networks:
       - bda-net
 
+  frontend:
+    image: nginx:alpine
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    networks:
+      - bda-net
+
+  api2:
+    build:
+      context: ./api/api2
+      dockerfile: Dockerfile
+    container_name: api2
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: bda_imagenes
+      POSTGRES_USER: bda_user
+      POSTGRES_PASSWORD: bda_pass
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_SECURE: "false"
+      MINIO_PROCESSED_BUCKET: imagenes-procesadas
+    ports:
+      - "8002:8000"
+    networks:
+      - bda-net
+
   o4:
     build:
       context: ./orquestadores/o4

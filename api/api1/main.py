@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from kafka import KafkaProducer
 from minio import Minio
 
@@ -54,6 +55,14 @@ def create_minio_client() -> Minio:
 
 
 app = FastAPI(title="API Ingesta")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 producer = create_kafka_producer()
 minio_client = create_minio_client()
 raw_bucket = os.getenv("MINIO_RAW_BUCKET", "imagenes-raw")

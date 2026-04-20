@@ -51,36 +51,36 @@ def build_age_command(face_event: dict) -> dict:
 def process_message(face_event: dict, producer: KafkaProducer):
     trace = face_event["event"]["trace"]
     payload = face_event["payload"]
+    guid = trace["request_id"]
     faces = payload.get("faces", [])
     total_faces = payload.get("total_faces", len(faces))
     now = datetime.now(timezone.utc)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            # Id_Imagen se numera desde 1 dentro de cada solicitud
             cur.execute(
-                """
-                SELECT Id_Solicitud
-                FROM Solicitud
-                WHERE GUID_Solicitud = %s
-                ORDER BY Id_Solicitud DESC
-                LIMIT 1
-                """,
-                (trace["request_id"],),
+                "SELECT COALESCE(MAX(Id_Imagen), 0) FROM Imagenes WHERE GUID_Solicitud = %s",
+                (guid,),
             )
-            row = cur.fetchone()
-            if not row:
-                raise ValueError(f"No existe Solicitud para request_id={trace['request_id']}")
-            solicitud_id = row[0]
+            current_max = cur.fetchone()[0]
 
-            cur.execute("SELECT COALESCE(MAX(Id_Imagen), 0) FROM Imagenes")
-            current_max_img_id = cur.fetchone()[0]
-            for idx, _ in enumerate(faces, start=1):
+            for idx, face in enumerate(faces, start=1):
                 cur.execute(
                     """
-                    INSERT INTO Imagenes (Id_Imagen, Id_Solicitud, Estado)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO Imagenes (
+                        GUID_Solicitud, Id_Imagen,
+                        Imagen_X, Imagen_Y, Imagen_Ancho, Imagen_Alto
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    (current_max_img_id + idx, solicitud_id, "DETECTADA"),
+                    (
+                        guid,
+                        current_max + idx,
+                        face.get("x", 0),
+                        face.get("y", 0),
+                        face.get("width", 0),
+                        face.get("height", 0),
+                    ),
                 )
 
             cur.execute(
@@ -88,18 +88,17 @@ def process_message(face_event: dict, producer: KafkaProducer):
                 UPDATE Solicitud
                 SET Inicio_Deteccion_Caras = COALESCE(Inicio_Deteccion_Caras, %s),
                     Fin_Deteccion_Caras = %s,
-                    Num_Imagenes_Total = %s,
                     Inicio_Edad = %s,
                     Estado = %s
-                WHERE Id_Solicitud = %s
+                WHERE GUID_Solicitud = %s
                 """,
-                (now, now, total_faces, now, "EN_ANALISIS_EDAD", solicitud_id),
+                (now, now, now, "EN_ANALISIS_EDAD", guid),
             )
         conn.commit()
 
     output_cmd = build_age_command(face_event)
     producer.send(OUTPUT_TOPIC, output_cmd).get(timeout=10)
-    print(f"[o2] request_id={trace['request_id']} actualizado y cmd.age_detection publicado.")
+    print(f"[o2] {guid}: {total_faces} caras registradas, cmd.age_detection publicado.")
 
 
 def run():

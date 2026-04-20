@@ -52,74 +52,60 @@ def build_command(age_event: dict, target_topic: str, minors_count: int) -> dict
 
 def process_message(age_event: dict, producer: KafkaProducer):
     trace = age_event["event"]["trace"]
+    guid = trace["request_id"]
     faces = age_event["payload"].get("faces", [])
-    minors_count = sum(1 for face in faces if face.get("is_minor"))
+    minors_count = sum(1 for f in faces if f.get("is_minor"))
     now = datetime.now(timezone.utc)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT Id_Solicitud
-                FROM Solicitud
-                WHERE GUID_Solicitud = %s
-                ORDER BY Id_Solicitud DESC
-                LIMIT 1
-                """,
-                (trace["request_id"],),
-            )
-            row = cur.fetchone()
-            if not row:
-                raise ValueError(f"No existe Solicitud para request_id={trace['request_id']}")
-            solicitud_id = row[0]
-
+            # Actualizar Mayor_18 y score en cada fila de Imagenes
             for idx, face in enumerate(faces, start=1):
-                estado_imagen = "MENOR" if face.get("is_minor") else "ADULTO"
+                mayor_18 = not face.get("is_minor", False)
+                # score: confianza de la prediccion (el stub no la provee; se usa 0.9)
+                score = face.get("confidence", 0.9)
                 cur.execute(
                     """
                     UPDATE Imagenes
-                    SET Estado = %s
-                    WHERE Id_Solicitud = %s
+                    SET Mayor_18 = %s, score = %s
+                    WHERE GUID_Solicitud = %s
                       AND Id_Imagen = (
-                        SELECT Id_Imagen
-                        FROM Imagenes
-                        WHERE Id_Solicitud = %s
-                        ORDER BY Id_Imagen
-                        OFFSET %s LIMIT 1
+                          SELECT Id_Imagen FROM Imagenes
+                          WHERE GUID_Solicitud = %s
+                          ORDER BY Id_Imagen
+                          OFFSET %s LIMIT 1
                       )
                     """,
-                    (estado_imagen, solicitud_id, solicitud_id, idx - 1),
+                    (mayor_18, score, guid, guid, idx - 1),
                 )
 
             if minors_count > 0:
                 cur.execute(
                     """
                     UPDATE Solicitud
-                    SET Fin_Edad = %s,
-                        Num_Imagenes_Pixeladas = %s,
+                    SET Fin_edad = %s,
                         Inicio_Pixelado = %s,
                         Estado = %s
-                    WHERE Id_Solicitud = %s
+                    WHERE GUID_Solicitud = %s
                     """,
-                    (now, minors_count, now, "PENDIENTE_PIXELADO", solicitud_id),
+                    (now, now, "PENDIENTE_PIXELADO", guid),
                 )
             else:
                 cur.execute(
                     """
                     UPDATE Solicitud
-                    SET Fin_Edad = %s,
-                        Num_Imagenes_Pixeladas = 0,
+                    SET Fin_edad = %s,
                         Estado = %s
-                    WHERE Id_Solicitud = %s
+                    WHERE GUID_Solicitud = %s
                     """,
-                    (now, "PENDIENTE_STORAGE", solicitud_id),
+                    (now, "PENDIENTE_STORAGE", guid),
                 )
         conn.commit()
 
     target_topic = PIXELATION_TOPIC if minors_count > 0 else STORAGE_TOPIC
     output_cmd = build_command(age_event, target_topic, minors_count)
     producer.send(target_topic, output_cmd).get(timeout=10)
-    print(f"[o3] request_id={trace['request_id']} -> {target_topic}")
+    print(f"[o3] {guid} -> {target_topic} ({minors_count} menores)")
 
 
 def run():

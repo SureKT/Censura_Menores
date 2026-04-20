@@ -52,24 +52,17 @@ def process_message(raw_event: dict, producer: KafkaProducer):
     trace = raw_event["event"]["trace"]
     payload = raw_event["payload"]
     now = datetime.now(timezone.utc)
+    url_original = f"{payload['bucket']}/{payload['object_key']}"
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COALESCE(MAX(Id_Solicitud), 0) + 1 FROM Solicitud")
-            next_id = cur.fetchone()[0]
             cur.execute(
                 """
                 INSERT INTO Solicitud (
-                    Id_Solicitud, GUID_Solicitud, Id_Fichero, Inicio_Solicitud, Estado
-                ) VALUES (%s, %s, %s, %s, %s)
+                    GUID_Solicitud, URL_Imagen_Original, Inicio_Solicitud, Estado
+                ) VALUES (%s, %s, %s, %s)
                 """,
-                (
-                    next_id,
-                    trace["request_id"],
-                    payload["object_key"],
-                    now,
-                    "RECIBIDO",
-                ),
+                (trace["request_id"], url_original, now, "RECIBIDO"),
             )
         conn.commit()
 
