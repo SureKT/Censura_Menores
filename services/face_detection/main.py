@@ -1,10 +1,15 @@
 import json
 import os
 import time
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 
+import cv2
+import numpy as np
 from kafka import KafkaConsumer, KafkaProducer
+from minio import Minio
+from ultralytics import YOLO
 
 
 APP_NAME = "face-detection"
@@ -12,12 +17,65 @@ INPUT_TOPIC = "cmd.face_detection"
 OUTPUT_TOPIC = "evt.face_detection.completed"
 GROUP_ID = "face-detection-group"
 
+YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "/app/yolov8n-face.pt")
+YOLO_MODEL_URL = (
+    "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov8n-face.pt"
+)
+YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.5"))
 
-def build_output_event(cmd_event: dict) -> dict:
+
+def create_minio_client() -> Minio:
+    endpoint = os.getenv("MINIO_ENDPOINT", "minio:9000")
+    access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
+    secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
+    return Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
+
+
+def load_model() -> YOLO:
+    if not os.path.exists(YOLO_MODEL_PATH):
+        print(f"[face_detection] Descargando modelo YOLOv8-face en {YOLO_MODEL_PATH}...")
+        urllib.request.urlretrieve(YOLO_MODEL_URL, YOLO_MODEL_PATH)
+        print("[face_detection] Modelo descargado.")
+    model = YOLO(YOLO_MODEL_PATH)
+    print(f"[face_detection] YOLOv8-face cargado (conf={YOLO_CONFIDENCE}).")
+    return model
+
+
+def load_image_from_minio(minio_client: Minio, bucket: str, object_key: str) -> np.ndarray:
+    response = minio_client.get_object(bucket, object_key)
+    try:
+        image_bytes = response.read()
+    finally:
+        response.close()
+        response.release_conn()
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError(f"No se pudo decodificar la imagen: {object_key}")
+    return image
+
+
+def detect_faces(model: YOLO, image: np.ndarray) -> list[dict]:
+    results = model(image, conf=YOLO_CONFIDENCE, verbose=False)
+    faces = []
+    for result in results:
+        for box in result.boxes.xyxy.tolist():
+            x1, y1, x2, y2 = box
+            faces.append(
+                {
+                    "x": int(x1),
+                    "y": int(y1),
+                    "width": int(x2 - x1),
+                    "height": int(y2 - y1),
+                }
+            )
+    return faces
+
+
+def build_output_event(cmd_event: dict, faces: list[dict]) -> dict:
     trace = cmd_event["event"]["trace"]
     payload = cmd_event["payload"]
-    # Stub inicial: devuelve una deteccion fija para habilitar flujo end-to-end.
-    faces = [{"x": 10, "y": 10, "width": 100, "height": 100}]
     return {
         "event": {
             "event_id": str(uuid.uuid4()),
@@ -41,6 +99,10 @@ def build_output_event(cmd_event: dict) -> dict:
 
 def run():
     bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
+
+    model = load_model()
+    minio_client = create_minio_client()
+
     producer = KafkaProducer(
         bootstrap_servers=bootstrap,
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
@@ -54,15 +116,17 @@ def run():
         value_deserializer=lambda x: json.loads(x.decode("utf-8")),
     )
 
-    print("[face_detection] Escuchando cmd.face_detection...")
+    print(f"[face_detection] Escuchando {INPUT_TOPIC}...")
     for msg in consumer:
         try:
-            output_event = build_output_event(msg.value)
+            cmd_event = msg.value
+            payload = cmd_event["payload"]
+            image = load_image_from_minio(minio_client, payload["bucket"], payload["object_key"])
+            faces = detect_faces(model, image)
+            output_event = build_output_event(cmd_event, faces)
             producer.send(OUTPUT_TOPIC, output_event).get(timeout=10)
-            print(
-                f"[face_detection] Evento emitido para request_id="
-                f"{output_event['event']['trace']['request_id']}"
-            )
+            request_id = cmd_event["event"]["trace"]["request_id"]
+            print(f"[face_detection] {len(faces)} rostros detectados para request_id={request_id}")
         except Exception as exc:
             print(f"[face_detection] Error procesando mensaje: {exc}")
             time.sleep(1)

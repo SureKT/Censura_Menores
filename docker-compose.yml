@@ -182,8 +182,16 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_SECURE: "false"
+      YOLO_MODEL_PATH: /app/yolov8n-face.pt
+      YOLO_CONFIDENCE: "0.5"
     networks:
       - bda-net
 
