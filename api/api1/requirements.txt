@@ -3,3 +3,4 @@ uvicorn==0.30.6
 python-multipart==0.0.9
 kafka-python==2.0.2
 minio==7.2.7
+psycopg2-binary==2.9.9

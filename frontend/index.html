@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Censura de Menores</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #ECEAE6;
+      --surface:  #F5F4F1;
+      --border:   #D4D1CD;
+      --text:     #1A1A18;
+      --muted:    #7A7773;
+      --done:     #3E6B4E;
+      --minor:    rgba(180, 60, 40, 0.55);
+      --adult:    rgba(80, 80, 80, 0.45);
+      --pending:  rgba(140, 140, 140, 0.35);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    header {
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+    header h1 { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+    header p  { font-size: 13px; color: var(--muted); }
+
+    /* ── Layout ─────────────────────────────────── */
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    /* Estado inicial: solo upload centrado */
+    .upload-only {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    /* Estado procesando: dos columnas */
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 32px;
+      width: 100%;
+      max-width: 1060px;
+      align-items: start;
+    }
+
+    /* ── Zona de imagen ──────────────────────────── */
+    .image-wrap {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--surface);
+      aspect-ratio: 4/3;
+      cursor: pointer;
+    }
+
+    .image-wrap img,
+    .image-wrap canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .image-wrap img    { object-fit: contain; }
+    .image-wrap canvas { pointer-events: none; }
+
+    /* Upload placeholder */
+    .upload-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+    .upload-placeholder svg { opacity: .4; }
+    .upload-placeholder .label { font-size: 14px; }
+    .upload-placeholder .hint  { font-size: 12px; opacity: .7; }
+
+    .image-wrap:hover .upload-placeholder { color: var(--text); }
+    .image-wrap.drag-over { border-color: var(--text); border-style: dashed; }
+
+    input[type=file] { display: none; }
+
+    /* ── Panel derecho ───────────────────────────── */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .panel-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ── Timeline de etapas ──────────────────────── */
+    .stages { display: flex; flex-direction: column; }
+
+    .stage {
+      display: flex;
+      gap: 14px;
+      position: relative;
+    }
+
+    .stage:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 22px;
+      width: 1px;
+      height: calc(100% - 6px);
+      background: var(--border);
+    }
+
+    .dot {
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+      margin-top: 3px;
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color .2s, background .2s;
+    }
+
+    .stage.active .dot {
+      border-color: var(--text);
+      background: var(--text);
+    }
+    .stage.active .dot::after {
+      content: '';
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: white;
+      animation: blink 1s ease-in-out infinite;
+    }
+    .stage.done .dot {
+      border-color: var(--done);
+      background: var(--done);
+    }
+    .stage.done .dot::after {
+      content: '';
+      width: 4px; height: 7px;
+      border: 1.5px solid white;
+      border-top: none; border-left: none;
+      transform: rotate(45deg) translateY(-1px);
+      display: block;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .25; }
+    }
+
+    .stage-body { padding-bottom: 20px; flex: 1; }
+
+    .stage-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .stage.pending .stage-name { color: var(--muted); }
+
+    .stage-time {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 5px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      background: #E3E1DD;
+      color: var(--text);
+    }
+
+    /* ── Resultado ───────────────────────────────── */
+    .result-block {
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn-download {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--text);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn-download:hover { background: #333; }
+
+    .btn-reset {
+      background: none;
+      border: none;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      text-align: center;
+      text-decoration: underline;
+    }
+
+    /* ── Leyenda ─────────────────────────────────── */
+    .legend {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-box  {
+      width: 12px; height: 12px; border-radius: 2px;
+      border: 1.5px solid;
+    }
+    .legend-box.minor { border-color: #B43C28; background: rgba(180,60,40,.2); }
+    .legend-box.adult { border-color: #888;    background: rgba(80,80,80,.15); }
+
+    /* ── Mensaje de estado ───────────────────────── */
+    #statusMsg {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Censura de Menores</h1>
+  <p>Detección y pixelado automático de rostros de menores</p>
+</header>
+
+<main id="main">
+
+  <!-- Estado inicial -->
+  <div class="upload-only" id="uploadOnly">
+    <div class="image-wrap" id="uploadZone" style="width:100%; aspect-ratio:4/3">
+      <div class="upload-placeholder" id="placeholder">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span class="label">Arrastra una imagen o haz clic</span>
+        <span class="hint">JPG · PNG · máx 10 MB</span>
+      </div>
+      <img id="imgPreview" style="display:none" />
+      <canvas id="facesCanvas" style="display:none"></canvas>
+    </div>
+    <p id="statusMsg"></p>
+  </div>
+
+  <!-- Estado split (oculto inicialmente) -->
+  <div class="split" id="splitView" style="display:none">
+
+    <div style="display:flex; flex-direction:column; gap:12px">
+      <div class="image-wrap" id="uploadZoneSplit" style="cursor:default">
+        <img id="imgPreviewSplit" style="display:none" />
+        <canvas id="facesCanvasSplit"></canvas>
+      </div>
+      <div class="legend" id="legend" style="display:none">
+        <div class="legend-item"><div class="legend-box minor"></div> Menor</div>
+        <div class="legend-item"><div class="legend-box adult"></div> Adulto / sin clasificar</div>
+      </div>
+      <p id="statusMsgSplit" style="font-size:12px; color:var(--muted)"></p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">Pipeline</div>
+      <div class="stages" id="stages"></div>
+      <div class="result-block" id="resultBlock" style="display:none">
+        <a class="btn-download" id="downloadBtn" href="#" target="_blank">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar imagen procesada
+        </a>
+        <button class="btn-reset" onclick="resetUI()">← Nueva imagen</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<input type="file" id="fileInput" accept="image/*" />
+
+<script>
+  const API1 = 'http://localhost:8001';
+  const API2 = 'http://localhost:8002';
+
+  const STAGES = [
+    { key: 'recibido',  label: 'Imagen recibida',      start: 'inicio_solicitud',                end: null },
+    { key: 'caras',     label: 'Detección de caras',   start: 'inicio_deteccion_caras',          end: 'fin_deteccion_caras' },
+    { key: 'edad',      label: 'Estimación de edad',   start: 'inicio_edad',                     end: 'fin_edad' },
+    { key: 'pixelado',  label: 'Pixelado',             start: 'inicio_pixelado',                 end: 'fin_pixelado' },
+    { key: 'storage',   label: 'Almacenamiento',       start: 'inicio_almacenamiento_solicitud', end: 'fin_almacenamiento_solicitud' },
+  ];
+
+  let pollTimer  = null;
+  let requestId  = null;
+  let lastCaras  = [];
+
+  // ── Upload ────────────────────────────────────────
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput  = document.getElementById('fileInput');
+
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+  async function handleFile(file) {
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    setStatus('Subiendo imagen...');
+    renderStages({});
+
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res  = await fetch(`${API1}/images`, { method: 'POST', body: form });
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+      const data = await res.json();
+      requestId  = data.request_id;
+      setStatus('Procesando...');
+      pollTimer = setInterval(poll, 1000);
+    } catch (e) {
+      setStatus(`Error: ${e.message}`);
+    }
+  }
+
+  // ── Polling ───────────────────────────────────────
+  async function poll() {
+    try {
+      const res  = await fetch(`${API2}/solicitudes/${requestId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      renderStages(data);
+      drawFaces(data.caras || []);
+
+      if (data.estado === 'COMPLETED') {
+        clearInterval(pollTimer);
+        setStatus('');
+        if (data.download_url) showResult(data.download_url);
+      }
+    } catch (_) {}
+  }
+
+  // ── Render pipeline ───────────────────────────────
+  function renderStages(data) {
+    const container = document.getElementById('stages');
+    container.innerHTML = STAGES.map((s, i) => {
+      const started  = s.start && data[s.start];
+      const finished = s.end   && data[s.end];
+      const isFirst  = s.key === 'recibido';
+
+      const state = (isFirst && started) || finished ? 'done'
+                  : (!isFirst && started)             ? 'active'
+                  : 'pending';
+
+      let timeHtml = '';
+      if (finished && s.end) {
+        const ms = new Date(data[s.end]) - new Date(data[s.start]);
+        timeHtml = `<div class="stage-time">${fmtMs(ms)}</div>`;
+      } else if (started && !isFirst) {
+        timeHtml = `<div class="stage-time">en curso…</div>`;
+      }
+
+      const caras   = data.caras || [];
+      const nCaras  = caras.length;
+      const nMenores = caras.filter(c => c.mayor_18 === false).length;
+
+      let badge = '';
+      if (s.key === 'caras' && nCaras > 0)
+        badge = `<div class="badge">${nCaras} cara${nCaras !== 1 ? 's' : ''} detectada${nCaras !== 1 ? 's' : ''}</div>`;
+      if (s.key === 'pixelado' && data.Fin_Pixelado)
+        badge = `<div class="badge">${nMenores} menor${nMenores !== 1 ? 'es' : ''} pixelado${nMenores !== 1 ? 's' : ''}</div>`;
+
+      const isLast = i === STAGES.length - 1;
+      return `
+        <div class="stage ${state}">
+          <div class="dot"></div>
+          ${!isLast ? '' : ''}
+          <div class="stage-body">
+            <div class="stage-name">${s.label}</div>
+            ${timeHtml}${badge}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Dibujar cajas de caras en canvas ──────────────
+  function drawFaces(caras) {
+    if (!caras || caras.length === 0) return;
+    lastCaras = caras;
+
+    const img    = document.getElementById('imgPreviewSplit');
+    const canvas = document.getElementById('facesCanvasSplit');
+    if (!img.complete || !img.naturalWidth) return;
+
+    const cw = canvas.offsetWidth;
+    const ch = canvas.offsetHeight;
+    canvas.width  = cw;
+    canvas.height = ch;
+
+    // Calcular cómo encaja la imagen con object-fit: contain
+    const scaleX  = cw / img.naturalWidth;
+    const scaleY  = ch / img.naturalHeight;
+    const scale   = Math.min(scaleX, scaleY);
+    const offsetX = (cw - img.naturalWidth  * scale) / 2;
+    const offsetY = (ch - img.naturalHeight * scale) / 2;
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, cw, ch);
+
+    caras.forEach(cara => {
+      const x = offsetX + cara.x * scale;
+      const y = offsetY + cara.y * scale;
+      const w = cara.width  * scale;
+      const h = cara.height * scale;
+
+      const isMinor = cara.mayor_18 === false;
+      ctx.strokeStyle = isMinor ? '#B43C28' : '#888';
+      ctx.fillStyle   = isMinor ? 'rgba(180,60,40,.15)' : 'rgba(80,80,80,.12)';
+      ctx.lineWidth   = 1.5;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+
+      // Etiqueta pequeña
+      const label = cara.mayor_18 === null ? '' : cara.mayor_18 ? 'Adulto' : 'Menor';
+      if (label) {
+        ctx.font      = `11px -apple-system, sans-serif`;
+        ctx.fillStyle = isMinor ? '#B43C28' : '#888';
+        ctx.fillText(label, x + 4, y + 14);
+      }
+    });
+
+    document.getElementById('legend').style.display = 'flex';
+  }
+
+  // ── Helpers de UI ─────────────────────────────────
+  function setPreview(url) {
+    // Pasar al modo split
+    document.getElementById('uploadOnly').style.display = 'none';
+    document.getElementById('splitView').style.display  = 'grid';
+
+    const img = document.getElementById('imgPreviewSplit');
+    img.src   = url;
+    img.style.display = 'block';
+    img.onload = () => drawFaces(lastCaras);
+  }
+
+  function showResult(downloadUrl) {
+    // Mostrar imagen procesada
+    const img = document.getElementById('imgPreviewSplit');
+    img.src   = downloadUrl;
+    img.onload = () => drawFaces(lastCaras);
+
+    const btn = document.getElementById('downloadBtn');
+    btn.href  = downloadUrl;
+    document.getElementById('resultBlock').style.display = 'flex';
+  }
+
+  function setStatus(msg) {
+    document.getElementById('statusMsgSplit').textContent = msg;
+    document.getElementById('statusMsg').textContent      = msg;
+  }
+
+  function resetUI() {
+    clearInterval(pollTimer);
+    requestId = null;
+    lastCaras = [];
+
+    document.getElementById('uploadOnly').style.display = 'flex';
+    document.getElementById('splitView').style.display  = 'none';
+    document.getElementById('imgPreviewSplit').src       = '';
+    document.getElementById('resultBlock').style.display = 'none';
+    document.getElementById('legend').style.display      = 'none';
+    setStatus('');
+    fileInput.value = '';
+
+    const canvas = document.getElementById('facesCanvasSplit');
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function fmtMs(ms) {
+    return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`;
+  }
+
+  // Redibujar cajas si la ventana cambia de tamaño
+  window.addEventListener('resize', () => drawFaces(lastCaras));
+</script>
+</body>
+</html>

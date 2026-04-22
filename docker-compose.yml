@@ -136,6 +136,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       minio:
         condition: service_healthy
       minio-init:
@@ -147,29 +149,13 @@ services:
       MINIO_SECRET_KEY: minioadmin123
       MINIO_SECURE: "false"
       MINIO_RAW_BUCKET: imagenes-raw
-    ports:
-      - "8001:8000"
-    networks:
-      - bda-net
-
-  o1:
-    build:
-      context: ./orquestadores/o1
-      dockerfile: Dockerfile
-    container_name: o1
-    restart: unless-stopped
-    depends_on:
-      kafka:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: bda_imagenes
       POSTGRES_USER: bda_user
       POSTGRES_PASSWORD: bda_pass
+    ports:
+      - "8001:8000"
     networks:
       - bda-net
 
@@ -182,16 +168,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_SECURE: "false"
-      YOLO_MODEL_PATH: /app/yolov8n-face.pt
-      YOLO_CONFIDENCE: "0.5"
     networks:
       - bda-net
 
@@ -272,44 +250,6 @@ services:
     networks:
       - bda-net
 
-  frontend:
-    image: nginx:alpine
-    container_name: frontend
-    restart: unless-stopped
-    ports:
-      - "3000:80"
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-    networks:
-      - bda-net
-
-  api2:
-    build:
-      context: ./api/api2
-      dockerfile: Dockerfile
-    container_name: api2
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: bda_imagenes
-      POSTGRES_USER: bda_user
-      POSTGRES_PASSWORD: bda_pass
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_SECURE: "false"
-      MINIO_PROCESSED_BUCKET: imagenes-procesadas
-    ports:
-      - "8002:8000"
-    networks:
-      - bda-net
-
   o4:
     build:
       context: ./orquestadores/o4
@@ -328,5 +268,31 @@ services:
       POSTGRES_DB: bda_imagenes
       POSTGRES_USER: bda_user
       POSTGRES_PASSWORD: bda_pass
+    networks:
+      - bda-net
+
+  api2:
+    build:
+      context: ./api/api2
+      dockerfile: Dockerfile
+    container_name: api2
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_SECURE: "false"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: bda_imagenes
+      POSTGRES_USER: bda_user
+      POSTGRES_PASSWORD: bda_pass
+    ports:
+      - "8002:8000"
     networks:
       - bda-net

@@ -107,18 +107,28 @@ def process_message(input_event: dict, producer: KafkaProducer):
 
 def run():
     bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
-    producer = KafkaProducer(
-        bootstrap_servers=bootstrap,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    )
-    consumer = KafkaConsumer(
-        *INPUT_TOPICS,
-        bootstrap_servers=bootstrap,
-        group_id=GROUP_ID,
-        auto_offset_reset="earliest",
-        enable_auto_commit=True,
-        value_deserializer=lambda x: json.loads(x.decode("utf-8")),
-    )
+
+    producer = consumer = None
+    for attempt in range(12):
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=bootstrap,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            )
+            consumer = KafkaConsumer(
+                *INPUT_TOPICS,
+                bootstrap_servers=bootstrap,
+                group_id=GROUP_ID,
+                auto_offset_reset="earliest",
+                enable_auto_commit=True,
+                value_deserializer=lambda x: json.loads(x.decode("utf-8")),
+            )
+            break
+        except Exception as exc:
+            print(f"[o4] Kafka no disponible (intento {attempt+1}/12): {exc}. Reintentando en 5s...")
+            time.sleep(5)
+    else:
+        raise RuntimeError("[o4] No se pudo conectar a Kafka.")
 
     print("[o4] Escuchando evt.pixelation.completed y cmd.storage...")
     for msg in consumer:

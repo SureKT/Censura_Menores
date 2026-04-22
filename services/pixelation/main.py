@@ -108,19 +108,29 @@ def build_output_event(cmd_event: dict) -> dict:
 
 def run():
     bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
-    producer = KafkaProducer(
-        bootstrap_servers=bootstrap,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    )
     minio_client = create_minio_client()
-    consumer = KafkaConsumer(
-        INPUT_TOPIC,
-        bootstrap_servers=bootstrap,
-        group_id=GROUP_ID,
-        auto_offset_reset="earliest",
-        enable_auto_commit=True,
-        value_deserializer=lambda x: json.loads(x.decode("utf-8")),
-    )
+
+    producer = consumer = None
+    for attempt in range(12):
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=bootstrap,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            )
+            consumer = KafkaConsumer(
+                INPUT_TOPIC,
+                bootstrap_servers=bootstrap,
+                group_id=GROUP_ID,
+                auto_offset_reset="earliest",
+                enable_auto_commit=True,
+                value_deserializer=lambda x: json.loads(x.decode("utf-8")),
+            )
+            break
+        except Exception as exc:
+            print(f"[pixelation] Kafka no disponible (intento {attempt+1}/12): {exc}. Reintentando en 5s...")
+            time.sleep(5)
+    else:
+        raise RuntimeError("[pixelation] No se pudo conectar a Kafka.")
 
     print("[pixelation] Escuchando cmd.pixelation...")
     for msg in consumer:

@@ -1,5 +1,10 @@
 import json
 import os
+
+# Desactivar telemetría/sync de Ultralytics ANTES de importarla
+os.environ["YOLO_CONFIG_DIR"] = "/app/.ultralytics"
+os.environ["YOLO_TELEMETRY"] = "False"
+
 import time
 import urllib.request
 import uuid
@@ -115,18 +120,27 @@ def run():
     model = load_model()
     minio_client = create_minio_client()
 
-    producer = KafkaProducer(
-        bootstrap_servers=bootstrap,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    )
-    consumer = KafkaConsumer(
-        INPUT_TOPIC,
-        bootstrap_servers=bootstrap,
-        group_id=GROUP_ID,
-        auto_offset_reset="earliest",
-        enable_auto_commit=True,
-        value_deserializer=lambda x: json.loads(x.decode("utf-8")),
-    )
+    producer = consumer = None
+    for attempt in range(12):
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=bootstrap,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            )
+            consumer = KafkaConsumer(
+                INPUT_TOPIC,
+                bootstrap_servers=bootstrap,
+                group_id=GROUP_ID,
+                auto_offset_reset="earliest",
+                enable_auto_commit=True,
+                value_deserializer=lambda x: json.loads(x.decode("utf-8")),
+            )
+            break
+        except Exception as exc:
+            print(f"[face_detection] Kafka no disponible (intento {attempt+1}/12): {exc}. Reintentando en 5s...")
+            time.sleep(5)
+    else:
+        raise RuntimeError("[face_detection] No se pudo conectar a Kafka.")
 
     print(f"[face_detection] Escuchando {INPUT_TOPIC}...")
     for msg in consumer:

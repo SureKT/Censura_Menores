@@ -1,7 +1,11 @@
 FROM python:3.11-slim
 
+ENV YOLO_CONFIG_DIR=/app/.ultralytics
+ENV YOLO_TELEMETRY=False
+ENV PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     wget \
     && rm -rf /var/lib/apt/lists/*
@@ -20,4 +24,4 @@ RUN wget -q -O /app/yolov8n-face.pt \
 
 COPY . .
 
-CMD ["python", "main.py"]
+CMD ["python", "-u", "main.py"]
