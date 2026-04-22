@@ -1,0 +1,24 @@
+import math
+
+import torch
+import torch.nn as nn
+from torchvision import models
+
+
+def build_model() -> nn.Module:
+    model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
+    model.classifier = nn.Sequential(
+        nn.Dropout(0.2),
+        nn.Linear(model.last_channel, 1),
+    )
+    return model
+
+
+def predict_age(model: nn.Module, tensor: torch.Tensor) -> tuple[int, float]:
+    """Returns (estimated_age, confidence). Confidence is higher the further from 18."""
+    model.eval()
+    with torch.no_grad():
+        raw = model(tensor).squeeze().item()
+    age = int(max(0, min(120, round(raw))))
+    confidence = round(1.0 / (1.0 + math.exp(-abs(age - 18) / 4.0)), 4)
+    return age, confidence
