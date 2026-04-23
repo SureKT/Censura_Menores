@@ -50,7 +50,7 @@ Todo mensaje debe incluir identificadores trazables (`GUID_Solicitud`, `image_id
 Servicios del pipeline (ver `Workflow.md` para detalle de cada uno):
 - **APIs**: API Ingesta, API Consulta.
 - **Logica IA**: Face Detection, Age Detection, Pixelation.
-- **Orquestadores**: Orq. Entrada, Orq. Analisis, Orq. Decision, Orq. Finalizacion.
+- **Orquestadores**: Orq. Analisis, Orq. Decision, Orq. Finalizacion.
 - **Infraestructura**: Kafka, MinIO, PostgreSQL.
 
 Para considerar una tarea completada:

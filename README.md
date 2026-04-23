@@ -50,7 +50,6 @@ Censura_Menores/
     api1/              <- API de ingesta (FastAPI, puerto 8001)
     api2/              <- API de consulta (FastAPI, puerto 8002)
   orquestadores/
-    o1/                <- Orquestador de entrada (bypasseado, API1 publica directamente)
     o2/                <- Orquestador de analisis
     o3/                <- Orquestador de decision
     o4/                <- Orquestador de finalizacion
@@ -79,7 +78,6 @@ Censura_Menores/
 
 ### Orquestadores
 
-- `o1`: orquestador de entrada. Registra la solicitud y publica `cmd.face_detection`. Actualmente bypasseado: API1 publica el comando directamente.
 - `o2`: orquestador de analisis. Consume `evt.face_detection.completed`, inserta las filas en la tabla `Imagenes` con coordenadas de cada cara y publica `cmd.age_detection`.
 - `o3`: orquestador de decision. Consume `evt.age_detection.completed`, actualiza `Mayor_18` y `score` en la tabla `Imagenes` y decide si publicar `cmd.pixelation` (si hay menores) o `cmd.storage` (si no hay menores).
 - `o4`: orquestador de finalizacion. Consume `evt.pixelation.completed` o `cmd.storage`, actualiza todos los timestamps finales, guarda la URL de la imagen terminada y marca la solicitud como `COMPLETED`.
