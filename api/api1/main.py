@@ -12,7 +12,7 @@ from kafka import KafkaProducer
 from minio import Minio
 
 
-APP_NAME = "api-ingesta-o1"
+APP_NAME = "api-ingesta"
 OUTPUT_TOPIC = "cmd.face_detection"
 
 
@@ -72,7 +72,7 @@ def build_face_detection_command(
     }
 
 
-app = FastAPI(title="API Ingesta + Orquestador Entrada")
+app = FastAPI(title="API Ingesta")
 
 app.add_middleware(
     CORSMiddleware,
@@ -116,7 +116,7 @@ async def upload_image(file: UploadFile = File(...)) -> dict:
     )
     url_original = f"{raw_bucket}/{object_key}"
 
-    # 3. Insertar registro en BD (lógica O1)
+    # 3. Insertar registro en BD
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -140,7 +140,7 @@ async def upload_image(file: UploadFile = File(...)) -> dict:
     )
     producer.send(OUTPUT_TOPIC, cmd).get(timeout=10)
 
-    print(f"[api1/o1] Solicitud {request_id} registrada → cmd.face_detection publicado.")
+    print(f"[api1] Solicitud {request_id} registrada → cmd.face_detection publicado.")
 
     return {
         "message": "Imagen recibida, registrada y enviada a detección de caras.",
