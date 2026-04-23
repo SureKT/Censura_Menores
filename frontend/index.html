@@ -14,9 +14,6 @@
       --text:     #1A1A18;
       --muted:    #7A7773;
       --done:     #3E6B4E;
-      --minor:    rgba(180, 60, 40, 0.55);
-      --adult:    rgba(80, 80, 80, 0.45);
-      --pending:  rgba(140, 140, 140, 0.35);
     }
 
     body {
@@ -48,7 +45,6 @@
       padding: 40px;
     }
 
-    /* Estado inicial: solo upload centrado */
     .upload-only {
       display: flex;
       flex-direction: column;
@@ -58,7 +54,6 @@
       max-width: 440px;
     }
 
-    /* Estado procesando: dos columnas */
     .split {
       display: grid;
       grid-template-columns: 1fr 320px;
@@ -78,7 +73,6 @@
       aspect-ratio: 4/3;
       cursor: pointer;
     }
-
     .image-wrap img,
     .image-wrap canvas {
       position: absolute;
@@ -86,11 +80,9 @@
       width: 100%;
       height: 100%;
     }
-
     .image-wrap img    { object-fit: contain; }
     .image-wrap canvas { pointer-events: none; }
 
-    /* Upload placeholder */
     .upload-placeholder {
       position: absolute;
       inset: 0;
@@ -101,21 +93,16 @@
       gap: 8px;
       color: var(--muted);
     }
-    .upload-placeholder svg { opacity: .4; }
+    .upload-placeholder svg   { opacity: .4; }
     .upload-placeholder .label { font-size: 14px; }
     .upload-placeholder .hint  { font-size: 12px; opacity: .7; }
-
     .image-wrap:hover .upload-placeholder { color: var(--text); }
     .image-wrap.drag-over { border-color: var(--text); border-style: dashed; }
 
     input[type=file] { display: none; }
 
     /* ── Panel derecho ───────────────────────────── */
-    .panel {
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
+    .panel { display: flex; flex-direction: column; gap: 20px; }
 
     .panel-label {
       font-size: 11px;
@@ -128,42 +115,28 @@
     /* ── Timeline de etapas ──────────────────────── */
     .stages { display: flex; flex-direction: column; }
 
-    .stage {
-      display: flex;
-      gap: 14px;
-      position: relative;
-    }
-
+    .stage { display: flex; gap: 14px; position: relative; }
     .stage:not(:last-child)::before {
       content: '';
       position: absolute;
-      left: 8px;
-      top: 22px;
+      left: 8px; top: 22px;
       width: 1px;
       height: calc(100% - 6px);
       background: var(--border);
     }
 
     .dot {
-      width: 17px;
-      height: 17px;
+      width: 17px; height: 17px;
       border-radius: 50%;
       border: 1.5px solid var(--border);
       background: var(--bg);
       flex-shrink: 0;
       margin-top: 3px;
-      position: relative;
-      z-index: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      position: relative; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
       transition: border-color .2s, background .2s;
     }
-
-    .stage.active .dot {
-      border-color: var(--text);
-      background: var(--text);
-    }
+    .stage.active .dot { border-color: var(--text); background: var(--text); }
     .stage.active .dot::after {
       content: '';
       width: 5px; height: 5px;
@@ -171,10 +144,7 @@
       background: white;
       animation: blink 1s ease-in-out infinite;
     }
-    .stage.done .dot {
-      border-color: var(--done);
-      background: var(--done);
-    }
+    .stage.done .dot { border-color: var(--done); background: var(--done); }
     .stage.done .dot::after {
       content: '';
       width: 4px; height: 7px;
@@ -183,28 +153,15 @@
       transform: rotate(45deg) translateY(-1px);
       display: block;
     }
-
     @keyframes blink {
       0%, 100% { opacity: 1; }
       50%       { opacity: .25; }
     }
 
     .stage-body { padding-bottom: 20px; flex: 1; }
-
-    .stage-name {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text);
-      line-height: 1.4;
-    }
+    .stage-name { font-size: 13px; font-weight: 500; line-height: 1.4; }
     .stage.pending .stage-name { color: var(--muted); }
-
-    .stage-time {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 2px;
-      font-variant-numeric: tabular-nums;
-    }
+    .stage-time { font-size: 11px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
 
     .badge {
       display: inline-block;
@@ -216,80 +173,61 @@
       color: var(--text);
     }
 
-    /* ── Resultado ───────────────────────────────── */
-    .result-block {
+    /* ── Panel de resultados ─────────────────────── */
+    #resultsPanel {
       border-top: 1px solid var(--border);
-      padding-top: 20px;
-      display: flex;
+      padding-top: 16px;
       flex-direction: column;
       gap: 10px;
     }
 
-    .btn-download {
+    .total-time { font-size: 13px; font-weight: 500; }
+
+    .timings-table { display: flex; flex-direction: column; gap: 5px; }
+    .timing-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .timing-row .t-val { font-variant-numeric: tabular-nums; color: var(--text); }
+
+    .faces-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 4px; }
+
+    .face-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 7px; }
+    .face-num   { color: var(--muted); width: 44px; flex-shrink: 0; }
+    .face-label { font-weight: 600; width: 48px; flex-shrink: 0; }
+    .conf-wrap  { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .conf-bar   { height: 100%; border-radius: 3px; transition: width .5s ease; }
+    .conf-pct   { font-variant-numeric: tabular-nums; color: var(--muted); width: 34px; text-align: right; flex-shrink: 0; }
+
+    /* ── Descarga ────────────────────────────────── */
+    .result-block {
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: var(--text);
-      color: white;
-      border: none;
-      border-radius: 5px;
-      font-size: 13px;
-      font-family: inherit;
-      cursor: pointer;
-      text-decoration: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-download {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; padding: 10px 16px;
+      background: var(--text); color: white;
+      border: none; border-radius: 5px;
+      font-size: 13px; font-family: inherit;
+      cursor: pointer; text-decoration: none;
     }
     .btn-download:hover { background: #333; }
-
     .btn-reset {
-      background: none;
-      border: none;
-      font-size: 12px;
-      color: var(--muted);
-      cursor: pointer;
-      font-family: inherit;
-      text-align: center;
-      text-decoration: underline;
+      background: none; border: none;
+      font-size: 12px; color: var(--muted);
+      cursor: pointer; font-family: inherit;
+      text-align: center; text-decoration: underline;
     }
-
-    .warning-box {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 10px 12px;
-      background: #FEF3CD;
-      border: 1px solid #F0C040;
-      border-radius: 5px;
-      font-size: 12px;
-      color: #7A5800;
-      line-height: 1.4;
-    }
-    .warning-box svg { flex-shrink: 0; margin-top: 1px; }
 
     /* ── Leyenda ─────────────────────────────────── */
-    .legend {
-      display: flex;
-      gap: 14px;
-      font-size: 11px;
-      color: var(--muted);
-      flex-wrap: wrap;
-    }
+    .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
     .legend-item { display: flex; align-items: center; gap: 5px; }
-    .legend-box  {
-      width: 12px; height: 12px; border-radius: 2px;
-      border: 1.5px solid;
-    }
+    .legend-box  { width: 12px; height: 12px; border-radius: 2px; border: 1.5px solid; }
     .legend-box.minor { border-color: #B43C28; background: rgba(180,60,40,.2); }
     .legend-box.adult { border-color: #888;    background: rgba(80,80,80,.15); }
 
-    /* ── Mensaje de estado ───────────────────────── */
-    #statusMsg {
-      font-size: 12px;
-      color: var(--muted);
-      text-align: center;
-      min-height: 18px;
-    }
+    #statusMsg { font-size: 12px; color: var(--muted); text-align: center; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -304,7 +242,7 @@
   <!-- Estado inicial -->
   <div class="upload-only" id="uploadOnly">
     <div class="image-wrap" id="uploadZone" style="width:100%; aspect-ratio:4/3">
-      <div class="upload-placeholder" id="placeholder">
+      <div class="upload-placeholder">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="17 8 12 3 7 8"/>
@@ -314,16 +252,15 @@
         <span class="hint">JPG · PNG · máx 10 MB</span>
       </div>
       <img id="imgPreview" style="display:none" />
-      <canvas id="facesCanvas" style="display:none"></canvas>
     </div>
     <p id="statusMsg"></p>
   </div>
 
-  <!-- Estado split (oculto inicialmente) -->
+  <!-- Estado split -->
   <div class="split" id="splitView" style="display:none">
 
     <div style="display:flex; flex-direction:column; gap:12px">
-      <div class="image-wrap" id="uploadZoneSplit" style="cursor:default">
+      <div class="image-wrap" style="cursor:default">
         <img id="imgPreviewSplit" style="display:none" />
         <canvas id="facesCanvasSplit"></canvas>
       </div>
@@ -337,15 +274,19 @@
     <div class="panel">
       <div class="panel-label">Pipeline</div>
       <div class="stages" id="stages"></div>
-      <div id="ageWarning" style="display:none" class="warning-box">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <span>No se pudo analizar la edad en esta imagen. Las caras detectadas se han tratado como adultos y no han sido pixeladas.</span>
+
+      <!-- Resultados (aparece al completar) -->
+      <div id="resultsPanel" style="display:none">
+        <div class="panel-label">Resultados</div>
+        <div class="total-time" id="totalTime"></div>
+        <div class="timings-table" id="stageTimings"></div>
+        <div class="faces-title" id="facesTitle"></div>
+        <div id="facesSection"></div>
       </div>
+
+      <!-- Descarga -->
       <div class="result-block" id="resultBlock" style="display:none">
-        <a class="btn-download" id="downloadBtn" href="#" target="_blank">
+        <a class="btn-download" id="downloadBtn" href="#" download>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
@@ -367,18 +308,18 @@
   const API2 = 'http://localhost:8002';
 
   const STAGES = [
-    { key: 'recibido',  label: 'Imagen recibida',      start: 'inicio_solicitud',                end: null },
-    { key: 'caras',     label: 'Detección de caras',   start: 'inicio_deteccion_caras',          end: 'fin_deteccion_caras' },
-    { key: 'edad',      label: 'Estimación de edad',   start: 'inicio_edad',                     end: 'fin_edad' },
-    { key: 'pixelado',  label: 'Pixelado',             start: 'inicio_pixelado',                 end: 'fin_pixelado' },
-    { key: 'storage',   label: 'Almacenamiento',       start: 'inicio_almacenamiento_solicitud', end: 'fin_almacenamiento_solicitud' },
+    { key: 'recibido', label: 'Imagen recibida',    start: 'inicio_solicitud',                end: null },
+    { key: 'caras',    label: 'Detección de caras', start: 'inicio_deteccion_caras',          end: 'fin_deteccion_caras' },
+    { key: 'edad',     label: 'Estimación de edad', start: 'inicio_edad',                     end: 'fin_edad' },
+    { key: 'pixelado', label: 'Pixelado',           start: 'inicio_pixelado',                 end: 'fin_pixelado' },
+    { key: 'storage',  label: 'Almacenamiento',     start: 'inicio_almacenamiento_solicitud', end: 'fin_almacenamiento_solicitud' },
   ];
 
-  let pollTimer  = null;
-  let requestId  = null;
-  let lastCaras  = [];
+  let pollTimer = null;
+  let requestId = null;
+  let lastCaras = [];
 
-  // ── Upload ────────────────────────────────────────
+  // ── Upload ──────────────────────────────────────
   const uploadZone = document.getElementById('uploadZone');
   const fileInput  = document.getElementById('fileInput');
 
@@ -406,13 +347,13 @@
       const data = await res.json();
       requestId  = data.request_id;
       setStatus('Procesando...');
-      pollTimer = setInterval(poll, 1000);
+      pollTimer  = setInterval(poll, 1000);
     } catch (e) {
       setStatus(`Error: ${e.message}`);
     }
   }
 
-  // ── Polling ───────────────────────────────────────
+  // ── Polling ─────────────────────────────────────
   async function poll() {
     try {
       const res  = await fetch(`${API2}/solicitudes/${requestId}`);
@@ -424,15 +365,12 @@
       if (data.estado === 'COMPLETED') {
         clearInterval(pollTimer);
         setStatus('');
-        if (data.age_detection_warning) {
-          document.getElementById('ageWarning').style.display = 'flex';
-        }
-        if (data.download_url) showResult(data.download_url);
+        showResult(data);
       }
     } catch (_) {}
   }
 
-  // ── Render pipeline ───────────────────────────────
+  // ── Pipeline timeline ────────────────────────────
   function renderStages(data) {
     const container = document.getElementById('stages');
     container.innerHTML = STAGES.map((s, i) => {
@@ -452,21 +390,18 @@
         timeHtml = `<div class="stage-time">en curso…</div>`;
       }
 
-      const caras   = data.caras || [];
-      const nCaras  = caras.length;
+      const caras    = data.caras || [];
+      const nCaras   = caras.length;
       const nMenores = caras.filter(c => c.mayor_18 === false).length;
-
       let badge = '';
       if (s.key === 'caras' && nCaras > 0)
         badge = `<div class="badge">${nCaras} cara${nCaras !== 1 ? 's' : ''} detectada${nCaras !== 1 ? 's' : ''}</div>`;
-      if (s.key === 'pixelado' && data.Fin_Pixelado)
+      if (s.key === 'pixelado' && data.fin_pixelado)
         badge = `<div class="badge">${nMenores} menor${nMenores !== 1 ? 'es' : ''} pixelado${nMenores !== 1 ? 's' : ''}</div>`;
 
-      const isLast = i === STAGES.length - 1;
       return `
         <div class="stage ${state}">
           <div class="dot"></div>
-          ${!isLast ? '' : ''}
           <div class="stage-body">
             <div class="stage-name">${s.label}</div>
             ${timeHtml}${badge}
@@ -475,7 +410,71 @@
     }).join('');
   }
 
-  // ── Dibujar cajas de caras en canvas ──────────────
+  // ── Mostrar resultado final ──────────────────────
+  function showResult(data) {
+    if (data.download_url) {
+      const img = document.getElementById('imgPreviewSplit');
+      // Asignar onload ANTES de cambiar src (evita race condition con caché)
+      img.onload = () => drawFaces(lastCaras);
+      img.src = data.download_url;
+      // Si ya está en caché, onload no dispara — forzamos el redibujado
+      if (img.complete && img.naturalWidth) drawFaces(lastCaras);
+      document.getElementById('downloadBtn').href = data.download_url;
+    }
+    document.getElementById('resultBlock').style.display = 'flex';
+    renderResults(data);
+  }
+
+  // ── Panel de resultados ──────────────────────────
+  function renderResults(data) {
+    // Tiempo total
+    if (data.inicio_solicitud && data.fin_solicitud) {
+      const ms = new Date(data.fin_solicitud) - new Date(data.inicio_solicitud);
+      document.getElementById('totalTime').textContent = `Tiempo total: ${fmtMs(ms)}`;
+    }
+
+    // Tiempo por etapa
+    const stagePairs = [
+      ['Detección de caras', 'inicio_deteccion_caras',          'fin_deteccion_caras'],
+      ['Estimación de edad', 'inicio_edad',                     'fin_edad'],
+      ['Pixelado',           'inicio_pixelado',                 'fin_pixelado'],
+      ['Almacenamiento',     'inicio_almacenamiento_solicitud', 'fin_almacenamiento_solicitud'],
+    ];
+    document.getElementById('stageTimings').innerHTML = stagePairs
+      .filter(([, s, e]) => data[s] && data[e])
+      .map(([label, s, e]) => {
+        const ms = new Date(data[e]) - new Date(data[s]);
+        return `<div class="timing-row"><span>${label}</span><span class="t-val">${fmtMs(ms)}</span></div>`;
+      }).join('');
+
+    // Caras con accuracy
+    const caras = data.caras || [];
+    document.getElementById('facesTitle').textContent =
+      caras.length > 0 ? `Caras detectadas (${caras.length})` : '';
+
+    document.getElementById('facesSection').innerHTML = caras.length === 0
+      ? '<div style="font-size:12px;color:var(--muted);margin-top:4px">No se detectaron caras.</div>'
+      : caras.map((cara, i) => {
+          const isMinor  = cara.mayor_18 === false;
+          const hasScore = cara.score != null && cara.score >= 0;
+          const pct      = hasScore ? Math.round(cara.score * 100) : null;
+          const color    = isMinor ? '#B43C28' : '#888';
+          const label    = isMinor ? 'MENOR' : 'Adulto';
+          return `
+            <div class="face-row">
+              <span class="face-num">Cara ${i + 1}</span>
+              <span class="face-label" style="color:${color}">${label}</span>
+              ${pct != null
+                ? `<div class="conf-wrap"><div class="conf-bar" style="width:${pct}%;background:${color}"></div></div>
+                   <span class="conf-pct">${pct}%</span>`
+                : `<span style="font-size:11px;color:var(--muted)">sin datos</span>`}
+            </div>`;
+        }).join('');
+
+    document.getElementById('resultsPanel').style.display = 'flex';
+  }
+
+  // ── Dibujar bounding boxes ───────────────────────
   function drawFaces(caras) {
     if (!caras || caras.length === 0) return;
     lastCaras = caras;
@@ -489,7 +488,6 @@
     canvas.width  = cw;
     canvas.height = ch;
 
-    // Calcular cómo encaja la imagen con object-fit: contain
     const scaleX  = cw / img.naturalWidth;
     const scaleY  = ch / img.naturalHeight;
     const scale   = Math.min(scaleX, scaleY);
@@ -512,39 +510,26 @@
       ctx.fillRect(x, y, w, h);
       ctx.strokeRect(x, y, w, h);
 
-      // Etiqueta pequeña
-      const label = cara.mayor_18 === null ? '' : cara.mayor_18 ? 'Adulto' : 'Menor';
-      if (label) {
+      const labelText = cara.mayor_18 === null ? '' : cara.mayor_18 ? 'Adulto' : 'Menor';
+      if (labelText) {
         ctx.font      = `11px -apple-system, sans-serif`;
         ctx.fillStyle = isMinor ? '#B43C28' : '#888';
-        ctx.fillText(label, x + 4, y + 14);
+        ctx.fillText(labelText, x + 4, y + 14);
       }
     });
 
     document.getElementById('legend').style.display = 'flex';
   }
 
-  // ── Helpers de UI ─────────────────────────────────
+  // ── Helpers ──────────────────────────────────────
   function setPreview(url) {
-    // Pasar al modo split
     document.getElementById('uploadOnly').style.display = 'none';
     document.getElementById('splitView').style.display  = 'grid';
 
     const img = document.getElementById('imgPreviewSplit');
-    img.src   = url;
+    img.onload = () => drawFaces(lastCaras);
+    img.src = url;
     img.style.display = 'block';
-    img.onload = () => drawFaces(lastCaras);
-  }
-
-  function showResult(downloadUrl) {
-    // Mostrar imagen procesada
-    const img = document.getElementById('imgPreviewSplit');
-    img.src   = downloadUrl;
-    img.onload = () => drawFaces(lastCaras);
-
-    const btn = document.getElementById('downloadBtn');
-    btn.href  = downloadUrl;
-    document.getElementById('resultBlock').style.display = 'flex';
   }
 
   function setStatus(msg) {
@@ -557,12 +542,12 @@
     requestId = null;
     lastCaras = [];
 
-    document.getElementById('uploadOnly').style.display = 'flex';
-    document.getElementById('splitView').style.display  = 'none';
-    document.getElementById('imgPreviewSplit').src       = '';
-    document.getElementById('resultBlock').style.display = 'none';
-    document.getElementById('legend').style.display      = 'none';
-    document.getElementById('ageWarning').style.display  = 'none';
+    document.getElementById('uploadOnly').style.display   = 'flex';
+    document.getElementById('splitView').style.display    = 'none';
+    document.getElementById('imgPreviewSplit').src         = '';
+    document.getElementById('resultBlock').style.display   = 'none';
+    document.getElementById('resultsPanel').style.display  = 'none';
+    document.getElementById('legend').style.display        = 'none';
     setStatus('');
     fileInput.value = '';
 
@@ -574,7 +559,6 @@
     return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`;
   }
 
-  // Redibujar cajas si la ventana cambia de tamaño
   window.addEventListener('resize', () => drawFaces(lastCaras));
 </script>
 </body>

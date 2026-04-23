@@ -17,6 +17,7 @@ from model import build_model, predict_age
 APP_NAME = "age-detection"
 INPUT_TOPIC = "cmd.age_detection"
 OUTPUT_TOPIC = "evt.age_detection.completed"
+DLQ_TOPIC   = "events.dead_letter"
 GROUP_ID = "age-detection-group"
 
 TRANSFORM = transforms.Compose([
@@ -24,6 +25,23 @@ TRANSFORM = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 ])
+
+
+def send_to_dlq(producer, original_msg: dict, error: Exception):
+    try:
+        producer.send(DLQ_TOPIC, {
+            "event": {
+                "event_id": str(uuid.uuid4()),
+                "event_type": DLQ_TOPIC,
+                "event_version": "v1",
+                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "source": APP_NAME,
+            },
+            "error": {"type": type(error).__name__, "message": str(error)},
+            "original_message": original_msg,
+        })
+    except Exception as dlq_exc:
+        print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
 
 
 def load_model(path: str):
@@ -155,6 +173,7 @@ def run():
             print(f"[age_detection] {rid} → {len(faces)} caras, {minors} menores")
         except Exception as exc:
             print(f"[age_detection] Error publicando evento: {exc}")
+            send_to_dlq(producer, msg.value, exc)
             time.sleep(1)
 
 

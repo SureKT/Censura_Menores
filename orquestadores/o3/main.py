@@ -9,6 +9,7 @@ from kafka import KafkaConsumer, KafkaProducer
 
 
 APP_NAME = "orq-decision"
+DLQ_TOPIC   = "events.dead_letter"
 INPUT_TOPIC = "evt.age_detection.completed"
 PIXELATION_TOPIC = "cmd.pixelation"
 STORAGE_TOPIC = "cmd.storage"
@@ -23,6 +24,23 @@ def get_db_connection():
         user=os.getenv("POSTGRES_USER", "bda_user"),
         password=os.getenv("POSTGRES_PASSWORD", "bda_pass"),
     )
+
+
+def send_to_dlq(producer, original_msg: dict, error: Exception):
+    try:
+        producer.send(DLQ_TOPIC, {
+            "event": {
+                "event_id": str(uuid.uuid4()),
+                "event_type": DLQ_TOPIC,
+                "event_version": "v1",
+                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "source": APP_NAME,
+            },
+            "error": {"type": type(error).__name__, "message": str(error)},
+            "original_message": original_msg,
+        })
+    except Exception as dlq_exc:
+        print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
 
 
 def build_command(age_event: dict, target_topic: str, minors_count: int) -> dict:
@@ -139,6 +157,7 @@ def run():
             process_message(msg.value, producer)
         except Exception as exc:
             print(f"[o3] Error procesando mensaje: {exc}")
+            send_to_dlq(producer, msg.value, exc)
             time.sleep(1)
 
 

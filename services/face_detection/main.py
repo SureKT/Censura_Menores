@@ -20,6 +20,7 @@ from ultralytics import YOLO
 APP_NAME = "face-detection"
 INPUT_TOPIC = "cmd.face_detection"
 OUTPUT_TOPIC = "evt.face_detection.completed"
+DLQ_TOPIC   = "events.dead_letter"
 GROUP_ID = "face-detection-group"
 
 YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "/app/yolov8n-face.pt")
@@ -90,6 +91,23 @@ def detect_faces(model: YOLO, image: np.ndarray) -> list[dict]:
     return faces
 
 
+def send_to_dlq(producer, original_msg: dict, error: Exception):
+    try:
+        producer.send(DLQ_TOPIC, {
+            "event": {
+                "event_id": str(uuid.uuid4()),
+                "event_type": DLQ_TOPIC,
+                "event_version": "v1",
+                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "source": APP_NAME,
+            },
+            "error": {"type": type(error).__name__, "message": str(error)},
+            "original_message": original_msg,
+        })
+    except Exception as dlq_exc:
+        print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
+
+
 def build_output_event(cmd_event: dict, faces: list[dict]) -> dict:
     trace = cmd_event["event"]["trace"]
     payload = cmd_event["payload"]
@@ -155,6 +173,7 @@ def run():
             print(f"[face_detection] {len(faces)} rostros detectados para request_id={request_id}")
         except Exception as exc:
             print(f"[face_detection] Error procesando mensaje: {exc}")
+            send_to_dlq(producer, msg.value, exc)
             time.sleep(1)
 
 

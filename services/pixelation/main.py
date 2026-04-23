@@ -13,6 +13,7 @@ from PIL import Image
 APP_NAME = "pixelation"
 INPUT_TOPIC = "cmd.pixelation"
 OUTPUT_TOPIC = "evt.pixelation.completed"
+DLQ_TOPIC   = "events.dead_letter"
 GROUP_ID = "pixelation-group"
 
 
@@ -36,6 +37,23 @@ def pixelate_region(image: Image.Image, x: int, y: int, width: int, height: int)
     downscaled = region.resize((max(1, region.width // 12), max(1, region.height // 12)))
     pixelated = downscaled.resize(region.size, Image.Resampling.NEAREST)
     image.paste(pixelated, (left, top, right, bottom))
+
+
+def send_to_dlq(producer, original_msg: dict, error: Exception):
+    try:
+        producer.send(DLQ_TOPIC, {
+            "event": {
+                "event_id": str(uuid.uuid4()),
+                "event_type": DLQ_TOPIC,
+                "event_version": "v1",
+                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "source": APP_NAME,
+            },
+            "error": {"type": type(error).__name__, "message": str(error)},
+            "original_message": original_msg,
+        })
+    except Exception as dlq_exc:
+        print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
 
 
 def process_image(cmd_event: dict, minio_client: Minio) -> tuple[str, str, str, int]:
@@ -150,6 +168,7 @@ def run():
             )
         except Exception as exc:
             print(f"[pixelation] Error procesando mensaje: {exc}")
+            send_to_dlq(producer, msg.value, exc)
             time.sleep(1)
 
 
