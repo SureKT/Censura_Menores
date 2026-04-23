@@ -113,6 +113,10 @@ def consultar_solicitud(guid: str):
 
     solicitud["caras"] = caras
 
+    # score == -1.0 indica que el análisis de edad falló para esa cara (formato no soportado)
+    if any(c.get("score") is not None and c["score"] < 0 for c in caras):
+        solicitud["age_detection_warning"] = True
+
     if solicitud["estado"] == "COMPLETED" and solicitud.get("url_imagen_terminada"):
         solicitud["download_url"] = f"http://localhost:8002/download/{solicitud['guid_solicitud']}"
     else:

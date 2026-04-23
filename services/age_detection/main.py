@@ -48,7 +48,13 @@ def create_minio_client() -> Minio:
 
 def fetch_image(minio_client: Minio, bucket: str, object_key: str) -> Image.Image:
     response = minio_client.get_object(bucket, object_key)
-    return Image.open(io.BytesIO(response.read())).convert("RGB")
+    data = response.read()
+    response.close()
+    response.release_conn()
+    buf = io.BytesIO(data)
+    img = Image.open(buf)
+    img.load()
+    return img.convert("RGB")
 
 
 def crop_face(img: Image.Image, face: dict, padding: float = 0.1) -> Image.Image:
@@ -130,15 +136,25 @@ def run():
 
     print("[age_detection] Escuchando cmd.age_detection...")
     for msg in consumer:
+        faces = None
         try:
             faces = process_message(msg.value, model, minio_client)
+        except Exception as exc:
+            print(f"[age_detection] Error procesando imagen: {exc}. Publicando evento sin estimación de edad.")
+            # Pasar las caras originales sin estimación (adultos por defecto para no pixelar en falso)
+            faces = [
+                {**face, "estimated_age": 30, "is_minor": False, "confidence": -1.0}
+                for face in msg.value.get("payload", {}).get("faces", [])
+            ]
+
+        try:
             output = build_output_event(msg.value, faces)
             producer.send(OUTPUT_TOPIC, output).get(timeout=10)
             rid = output["event"]["trace"]["request_id"]
             minors = sum(1 for f in faces if f["is_minor"])
             print(f"[age_detection] {rid} → {len(faces)} caras, {minors} menores")
         except Exception as exc:
-            print(f"[age_detection] Error: {exc}")
+            print(f"[age_detection] Error publicando evento: {exc}")
             time.sleep(1)
 
 
