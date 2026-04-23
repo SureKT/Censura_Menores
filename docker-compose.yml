@@ -185,6 +185,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      PYTHONUNBUFFERED: "1"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -206,6 +207,7 @@ services:
       minio:
         condition: service_healthy
     environment:
+      PYTHONUNBUFFERED: "1"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
@@ -227,6 +229,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      PYTHONUNBUFFERED: "1"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -248,6 +251,7 @@ services:
       minio:
         condition: service_healthy
     environment:
+      PYTHONUNBUFFERED: "1"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
@@ -269,6 +273,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      PYTHONUNBUFFERED: "1"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -291,6 +296,7 @@ services:
         condition: service_healthy
     environment:
       MINIO_ENDPOINT: minio:9000
+      MINIO_EXTERNAL_ENDPOINT: localhost:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin123
       MINIO_SECURE: "false"

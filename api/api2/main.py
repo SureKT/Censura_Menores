@@ -5,11 +5,11 @@ import psycopg2
 import psycopg2.extras
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from minio import Minio
 
 
 APP_NAME = "api-consulta"
-PRESIGNED_URL_EXPIRY = timedelta(hours=1)
 
 
 def get_db_connection():
@@ -39,6 +39,28 @@ minio_client = create_minio_client()
 @app.get("/health")
 def health():
     return {"status": "ok", "service": APP_NAME}
+
+
+@app.get("/download/{guid}")
+def download_image(guid: str):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT url_imagen_terminada FROM Solicitud WHERE guid_solicitud = %s AND estado = 'COMPLETED'",
+                (guid,),
+            )
+            row = cur.fetchone()
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="Imagen procesada no disponible.")
+
+    bucket, object_key = row[0].split("/", 1)
+    filename = object_key.split("/")[-1]
+
+    response = minio_client.get_object(bucket, object_key)
+    ext = filename.rsplit(".", 1)[-1].lower()
+    media_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+    media_type = media_map.get(ext, "application/octet-stream")
+    return StreamingResponse(response, media_type=media_type)
 
 
 @app.get("/solicitudes/{guid}")
@@ -91,16 +113,8 @@ def consultar_solicitud(guid: str):
 
     solicitud["caras"] = caras
 
-    # URL de descarga prefirmada cuando está completado
-    # Nota: psycopg2 RealDictCursor devuelve claves en minúsculas (PostgreSQL normaliza a lowercase)
     if solicitud["estado"] == "COMPLETED" and solicitud.get("url_imagen_terminada"):
-        bucket, object_key = solicitud["url_imagen_terminada"].split("/", 1)
-        try:
-            solicitud["download_url"] = minio_client.presigned_get_object(
-                bucket, object_key, expires=PRESIGNED_URL_EXPIRY
-            )
-        except Exception:
-            solicitud["download_url"] = None
+        solicitud["download_url"] = f"http://localhost:8002/download/{solicitud['guid_solicitud']}"
     else:
         solicitud.pop("url_imagen_terminada", None)
 
