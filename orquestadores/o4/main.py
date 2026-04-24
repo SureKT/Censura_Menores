@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime, timezone
 
 import psycopg2
+from contextlib import contextmanager
+from psycopg2 import pool as pg_pool
 from kafka import KafkaConsumer, KafkaProducer
 
 
@@ -14,15 +16,33 @@ OUTPUT_TOPIC = "evt.storage.completed"
 DLQ_TOPIC   = "events.dead_letter"
 GROUP_ID = "o4-group"
 
+_pool: pg_pool.SimpleConnectionPool | None = None
 
+
+def _get_pool() -> pg_pool.SimpleConnectionPool:
+    global _pool
+    if _pool is None:
+        _pool = pg_pool.SimpleConnectionPool(
+            1, 3,
+            host=os.getenv("POSTGRES_HOST", "postgres"),
+            port=int(os.getenv("POSTGRES_PORT", "5432")),
+            dbname=os.getenv("POSTGRES_DB", "bda_imagenes"),
+            user=os.getenv("POSTGRES_USER", "bda_user"),
+            password=os.getenv("POSTGRES_PASSWORD", "bda_pass"),
+        )
+    return _pool
+
+
+@contextmanager
 def get_db_connection():
-    return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "postgres"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "bda_imagenes"),
-        user=os.getenv("POSTGRES_USER", "bda_user"),
-        password=os.getenv("POSTGRES_PASSWORD", "bda_pass"),
-    )
+    conn = _get_pool().getconn()
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _get_pool().putconn(conn)
 
 
 def send_to_dlq(producer, original_msg: dict, error: Exception):

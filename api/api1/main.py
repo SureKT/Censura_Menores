@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime, timezone
 
 import psycopg2
+from contextlib import contextmanager
+from psycopg2 import pool as pg_pool
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from kafka import KafkaProducer
@@ -38,14 +40,33 @@ def create_minio_client() -> Minio:
     return Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
 
 
+_pool: pg_pool.ThreadedConnectionPool | None = None
+
+
+def _get_pool() -> pg_pool.ThreadedConnectionPool:
+    global _pool
+    if _pool is None:
+        _pool = pg_pool.ThreadedConnectionPool(
+            1, 10,
+            host=os.getenv("POSTGRES_HOST", "postgres"),
+            port=int(os.getenv("POSTGRES_PORT", "5432")),
+            dbname=os.getenv("POSTGRES_DB", "bda_imagenes"),
+            user=os.getenv("POSTGRES_USER", "bda_user"),
+            password=os.getenv("POSTGRES_PASSWORD", "bda_pass"),
+        )
+    return _pool
+
+
+@contextmanager
 def get_db_connection():
-    return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "postgres"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "bda_imagenes"),
-        user=os.getenv("POSTGRES_USER", "bda_user"),
-        password=os.getenv("POSTGRES_PASSWORD", "bda_pass"),
-    )
+    conn = _get_pool().getconn()
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _get_pool().putconn(conn)
 
 
 def build_face_detection_command(
@@ -99,6 +120,10 @@ async def upload_image(file: UploadFile = File(...)) -> dict:
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Archivo vacio.")
+
+    max_bytes = int(os.getenv("MAX_IMAGE_BYTES", str(10 * 1024 * 1024)))
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"Imagen demasiado grande (máx {max_bytes // (1024*1024)} MB).")
 
     # 1. Generar IDs
     request_id = str(uuid.uuid4())

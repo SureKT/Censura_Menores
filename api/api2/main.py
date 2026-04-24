@@ -1,8 +1,10 @@
 import os
+from contextlib import contextmanager
 from datetime import timedelta
 
 import psycopg2
 import psycopg2.extras
+from psycopg2 import pool as pg_pool
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -11,15 +13,33 @@ from minio import Minio
 
 APP_NAME = "api-consulta"
 
+_pool: pg_pool.ThreadedConnectionPool | None = None
 
+
+def _get_pool() -> pg_pool.ThreadedConnectionPool:
+    global _pool
+    if _pool is None:
+        _pool = pg_pool.ThreadedConnectionPool(
+            1, 10,
+            host=os.getenv("POSTGRES_HOST", "postgres"),
+            port=int(os.getenv("POSTGRES_PORT", "5432")),
+            dbname=os.getenv("POSTGRES_DB", "bda_imagenes"),
+            user=os.getenv("POSTGRES_USER", "bda_user"),
+            password=os.getenv("POSTGRES_PASSWORD", "bda_pass"),
+        )
+    return _pool
+
+
+@contextmanager
 def get_db_connection():
-    return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "postgres"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "bda_imagenes"),
-        user=os.getenv("POSTGRES_USER", "bda_user"),
-        password=os.getenv("POSTGRES_PASSWORD", "bda_pass"),
-    )
+    conn = _get_pool().getconn()
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _get_pool().putconn(conn)
 
 
 def create_minio_client() -> Minio:
@@ -118,7 +138,8 @@ def consultar_solicitud(guid: str):
         solicitud["age_detection_warning"] = True
 
     if solicitud["estado"] == "COMPLETED" and solicitud.get("url_imagen_terminada"):
-        solicitud["download_url"] = f"http://localhost:8002/download/{solicitud['guid_solicitud']}"
+        base = os.getenv("PUBLIC_BASE_URL", "http://localhost:8002")
+        solicitud["download_url"] = f"{base.rstrip('/')}/download/{solicitud['guid_solicitud']}"
     else:
         solicitud.pop("url_imagen_terminada", None)
 

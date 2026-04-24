@@ -37,7 +37,6 @@ Censura_Menores/
   AGENTS.md
   contracts/
     _defs.schema.json
-    images.raw.v1.schema.json
     evt.storage.completed.v1.schema.json
     events.dead_letter.v1.schema.json
   scripts/
@@ -152,7 +151,6 @@ python test.py foto.jpg --model otro_modelo.pth
 ## Topics y flujo de eventos
 
 Topics definidos:
-- `images.raw`
 - `cmd.face_detection`
 - `evt.face_detection.completed`
 - `cmd.age_detection`

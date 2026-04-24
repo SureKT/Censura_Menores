@@ -19,12 +19,6 @@ Guia comun para mantener consistencia entre desarrollo asistido por IA (Cursor, 
 
 ## 3) Convenciones de eventos
 
-Topics de ingesta/resultado:
-- `images.raw` — imagen recibida por API Ingesta.
-- `images.faces_detected` — coordenadas de rostros detectados.
-- `images.age_estimated` — edades estimadas por rostro.
-- `images.processed` — imagen final pixelada lista para almacenar.
-
 Topics de eventos de servicio (publicados por servicios IA):
 - `evt.face_detection.completed`
 - `evt.age_detection.completed`
