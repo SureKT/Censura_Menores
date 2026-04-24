@@ -7,9 +7,13 @@ from torchvision import models
 
 def build_model() -> nn.Module:
     model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
+    # Cabeza con una capa oculta para mayor capacidad en la regresion de edad
     model.classifier = nn.Sequential(
+        nn.Dropout(0.3),
+        nn.Linear(model.last_channel, 256),
+        nn.ReLU(),
         nn.Dropout(0.2),
-        nn.Linear(model.last_channel, 1),
+        nn.Linear(256, 1),
     )
     return model
 

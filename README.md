@@ -110,22 +110,28 @@ Estructura: carpetas numericas (`001/`, `002/`, ..., `110/`) donde el nombre es 
 
 Instalar dependencias de entrenamiento:
 ```bash
+# Con GPU NVIDIA (recomendado — ~10x mas rapido que CPU)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --upgrade
+pip install -r services/age_detection/requirements-train.txt
+
+# Solo CPU (lento)
 pip install -r services/age_detection/requirements-train.txt
 ```
 
 Entrenar:
 ```bash
 cd services/age_detection
-python train.py --dataset ../../dataset/face_age --epochs 15
+python train.py --dataset ../../dataset/face_age --epochs 20
 ```
 
 Opciones disponibles:
 ```
---dataset   Ruta al dataset (default: ../../dataset/face_age)
---output    Ruta de salida del modelo (default: age_model.pth)
---epochs    Numero de epocas (default: 15)
---batch     Tamano de batch (default: 32)
---lr        Learning rate (default: 0.001)
+--dataset        Ruta al dataset (default: ../../dataset/face_age)
+--output         Ruta de salida del modelo (default: age_model.pth)
+--epochs         Epocas totales fase1+fase2 (default: 20)
+--batch          Tamano de batch (default: 32)
+--lr             Learning rate del clasificador; backbone usa lr*0.1 (default: 0.001)
+--freeze-epochs  Epocas con backbone congelado antes del fine-tuning (default: 5)
 ```
 
 El modelo entrenado se guarda como `services/age_detection/age_model.pth`. Tras el entrenamiento hay que reconstruir el contenedor:

@@ -15,7 +15,10 @@
       "PowerShell(docker exec face-detection python -c \"from kafka import KafkaProducer; print\\('conectando kafka...'\\); p = KafkaProducer\\(bootstrap_servers='kafka:29092'\\); print\\('kafka OK'\\)\" 2>&1)",
       "PowerShell(docker exec face-detection cat /proc/1/wchan)",
       "PowerShell(docker exec face-detection cat /proc/1/status)",
-      "PowerShell(docker exec face-detection env)"
+      "PowerShell(docker exec face-detection env)",
+      "Bash(python -c \"import torch; print\\('PyTorch', torch.__version__\\); print\\('CUDA disponible:', torch.cuda.is_available\\(\\)\\); print\\('CPU threads:', torch.get_num_threads\\(\\)\\)\")",
+      "Bash(nvidia-smi)",
+      "Bash(python -c \"import torch; print\\('torch:', torch.__version__\\); print\\('CUDA disponible:', torch.cuda.is_available\\(\\)\\); print\\('CUDA version:', torch.version.cuda\\)\")"
     ]
   }
 }
