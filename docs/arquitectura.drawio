@@ -5,135 +5,29 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <!-- ══ Fondo red Docker ══ -->
-        <mxCell id="bg" value="Docker Network · bda-net" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;verticalAlign=top;opacity=50;" vertex="1" parent="1">
-          <mxGeometry x="30" y="30" width="1380" height="780" as="geometry" />
-        </mxCell>
-
-        <!-- ══ ETIQUETAS DE SECCIÓN ══ -->
-        <mxCell id="lbl1" value="Entrada" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="50" y="90" width="100" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="lbl2" value="Mensaje Broker" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="600" y="90" width="140" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="lbl3" value="Consulta" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="1220" y="90" width="120" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="lbl4" value="Pipeline de procesamiento" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="490" y="380" width="220" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="lbl5" value="Infraestructura" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="570" y="590" width="140" height="30" as="geometry" />
-        </mxCell>
-
-        <!-- ══ FRONTEND ══ -->
-        <mxCell id="frontend" value="&lt;b&gt;Frontend&lt;/b&gt;&lt;br&gt;nginx · :3000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="130" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ API1 ══ -->
-        <mxCell id="api1" value="&lt;b&gt;API Ingesta&lt;/b&gt;&lt;br&gt;FastAPI · :8001" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="260" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ KAFKA ══ -->
-        <mxCell id="kafka" value="&lt;b&gt;Kafka&lt;/b&gt;&lt;br&gt;KRaft · :9092" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="600" y="130" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ API2 ══ -->
-        <mxCell id="api2" value="&lt;b&gt;API Consulta&lt;/b&gt;&lt;br&gt;FastAPI · :8002" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="1220" y="130" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ FACE DETECTION ══ -->
-        <mxCell id="face" value="&lt;b&gt;Face Detection&lt;/b&gt;&lt;br&gt;YOLOv8-face" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="420" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ O2 ══ -->
-        <mxCell id="o2" value="&lt;b&gt;O2&lt;/b&gt;&lt;br&gt;Orq. Análisis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="280" y="420" width="140" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ AGE DETECTION ══ -->
-        <mxCell id="age" value="&lt;b&gt;Age Detection&lt;/b&gt;&lt;br&gt;MobileNetV2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="480" y="420" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ O3 ══ -->
-        <mxCell id="o3" value="&lt;b&gt;O3&lt;/b&gt;&lt;br&gt;Orq. Decisión" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="700" y="420" width="140" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ PIXELATION ══ -->
-        <mxCell id="pixelation" value="&lt;b&gt;Pixelation&lt;/b&gt;&lt;br&gt;PIL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="900" y="420" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ O4 ══ -->
-        <mxCell id="o4" value="&lt;b&gt;O4&lt;/b&gt;&lt;br&gt;Orq. Finalización" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="1120" y="420" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ══ POSTGRESQL ══ -->
-        <mxCell id="postgres" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;:5432" style="shape=cylinder3;size=10;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="330" y="630" width="140" height="80" as="geometry" />
-        </mxCell>
-
-        <!-- ══ MINIO ══ -->
-        <mxCell id="minio" value="&lt;b&gt;MinIO&lt;/b&gt;&lt;br&gt;:9000 · consola :9001" style="shape=cylinder3;size=10;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="690" y="630" width="160" height="80" as="geometry" />
-        </mxCell>
-
-        <!-- ══ LEYENDA ══ -->
-        <mxCell id="leg_title" value="Leyenda" style="text;html=1;strokeColor=none;fillColor=none;fontStyle=1;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="1230" y="420" width="80" height="20" as="geometry" />
-        </mxCell>
-        <mxCell id="leg1" value="API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="1230" y="450" width="80" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="leg2" value="Servicio IA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="1230" y="485" width="80" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="leg3" value="Orquestador" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="1230" y="520" width="80" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="leg4" value="Frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="1230" y="555" width="80" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="leg5" value="Datos" style="shape=cylinder3;size=6;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="1230" y="590" width="80" height="30" as="geometry" />
-        </mxCell>
-
-        <!-- ══ FLECHAS PRINCIPALES ══ -->
-
-        <!-- Usuario → Frontend (implícito, no se muestra) -->
+        <!-- ══ ARISTAS (definidas primero → quedan detrás de los nodos) ══ -->
 
         <!-- Frontend → API1 -->
         <mxCell id="e_f_a1" value="POST /images" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" edge="1" source="frontend" target="api1" parent="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- Frontend ↔ API2 -->
+        <!-- Frontend ↔ API2: route sobre el bg (y=20, por encima del diagrama) -->
         <mxCell id="e_f_a2" value="GET /solicitudes (polling)" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;endArrow=open;startArrow=open;startFill=0;endFill=0;" edge="1" source="frontend" target="api2" parent="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="140" y="100" />
-              <mxPoint x="1300" y="100" />
+              <mxPoint x="140" y="20" />
+              <mxPoint x="1300" y="20" />
             </Array>
           </mxGeometry>
         </mxCell>
 
-        <!-- API1 → Kafka -->
+        <!-- API1 → Kafka: sale por la derecha de api1, sube al nivel de kafka -->
         <mxCell id="e_a1_k" value="cmd.face_detection" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" edge="1" source="api1" target="kafka" parent="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="140" y="310" />
-              <mxPoint x="140" y="340" />
-              <mxPoint x="680" y="340" />
-              <mxPoint x="680" y="160" />
+              <mxPoint x="560" y="290" />
+              <mxPoint x="560" y="190" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -148,14 +42,12 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- Kafka → Face Detection -->
+        <!-- Kafka → Face Detection: baja por x=680, gira izquierda a y=415 (margen superior del pipeline) -->
         <mxCell id="e_k_fd" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" edge="1" source="kafka" target="face" parent="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="680" y="240" />
-              <mxPoint x="680" y="370" />
-              <mxPoint x="140" y="370" />
-              <mxPoint x="140" y="420" />
+              <mxPoint x="680" y="415" />
+              <mxPoint x="40" y="415" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -175,12 +67,12 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- O3 → Pixelation (con menores) -->
+        <!-- O3 → Pixelation -->
         <mxCell id="e_o3_px" value="cmd.pixelation (menores)" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" edge="1" source="o3" target="pixelation" parent="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- O3 → O4 (sin menores) -->
+        <!-- O3 → O4 (sin menores): pasa por encima del pipeline a y=395 -->
         <mxCell id="e_o3_o4" value="cmd.storage (sin menores)" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;" edge="1" source="o3" target="o4" parent="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
@@ -223,9 +115,6 @@
         </mxCell>
 
         <!-- DLQ -->
-        <mxCell id="dlq" value="&lt;b&gt;events.dead_letter&lt;/b&gt;&lt;br&gt;(errores)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="1100" y="630" width="180" height="60" as="geometry" />
-        </mxCell>
         <mxCell id="e_dlq" value="error irrecuperable" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;strokeColor=#b85450;" edge="1" source="face" target="dlq" parent="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
@@ -234,6 +123,115 @@
               <mxPoint x="1100" y="660" />
             </Array>
           </mxGeometry>
+        </mxCell>
+
+        <!-- ══ NODOS (definidos después → se renderizan encima de las aristas) ══ -->
+
+        <!-- Fondo red Docker -->
+        <mxCell id="bg" value="Docker Network · bda-net" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;verticalAlign=top;opacity=50;" vertex="1" parent="1">
+          <mxGeometry x="30" y="30" width="1380" height="780" as="geometry" />
+        </mxCell>
+
+        <!-- Etiquetas de sección -->
+        <mxCell id="lbl1" value="Entrada" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="50" y="90" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl2" value="Mensaje Broker" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="600" y="90" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl3" value="Consulta" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="90" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl4" value="Pipeline de procesamiento" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="490" y="380" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl5" value="Infraestructura" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontStyle=1;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="570" y="590" width="140" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Frontend -->
+        <mxCell id="frontend" value="&lt;b&gt;Frontend&lt;/b&gt;&lt;br&gt;nginx · :3000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="130" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- API1 -->
+        <mxCell id="api1" value="&lt;b&gt;API Ingesta&lt;/b&gt;&lt;br&gt;FastAPI · :8001" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="260" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Kafka -->
+        <mxCell id="kafka" value="&lt;b&gt;Kafka&lt;/b&gt;&lt;br&gt;KRaft · :9092" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="600" y="130" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- API2 -->
+        <mxCell id="api2" value="&lt;b&gt;API Consulta&lt;/b&gt;&lt;br&gt;FastAPI · :8002" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="130" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Face Detection -->
+        <mxCell id="face" value="&lt;b&gt;Face Detection&lt;/b&gt;&lt;br&gt;YOLOv8-face" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="420" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- O2 -->
+        <mxCell id="o2" value="&lt;b&gt;O2&lt;/b&gt;&lt;br&gt;Orq. Análisis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="280" y="420" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Age Detection -->
+        <mxCell id="age" value="&lt;b&gt;Age Detection&lt;/b&gt;&lt;br&gt;MobileNetV2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="420" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- O3 -->
+        <mxCell id="o3" value="&lt;b&gt;O3&lt;/b&gt;&lt;br&gt;Orq. Decisión" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="700" y="420" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Pixelation -->
+        <mxCell id="pixelation" value="&lt;b&gt;Pixelation&lt;/b&gt;&lt;br&gt;PIL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="900" y="420" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- O4 -->
+        <mxCell id="o4" value="&lt;b&gt;O4&lt;/b&gt;&lt;br&gt;Orq. Finalización" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="420" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- PostgreSQL -->
+        <mxCell id="postgres" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;:5432" style="shape=cylinder3;size=10;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="330" y="630" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- MinIO -->
+        <mxCell id="minio" value="&lt;b&gt;MinIO&lt;/b&gt;&lt;br&gt;:9000 · consola :9001" style="shape=cylinder3;size=10;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="690" y="630" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Leyenda -->
+        <mxCell id="leg_title" value="Leyenda" style="text;html=1;strokeColor=none;fillColor=none;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="420" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1" value="API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="450" width="80" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2" value="Servicio IA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="485" width="80" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3" value="Orquestador" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="520" width="80" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4" value="Frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="555" width="80" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5" value="Datos" style="shape=cylinder3;size=6;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="590" width="80" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- DLQ -->
+        <mxCell id="dlq" value="&lt;b&gt;events.dead_letter&lt;/b&gt;&lt;br&gt;(errores)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="630" width="180" height="60" as="geometry" />
         </mxCell>
 
       </root>
