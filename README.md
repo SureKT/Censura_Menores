@@ -65,7 +65,7 @@ Censura_Menores/
 ### Infraestructura
 
 - `kafka`: broker de eventos en modo KRaft (sin ZooKeeper). Puerto 9092.
-- `kafka-init`: crea los 10 topics al arrancar.
+- `kafka-init`: crea los 11 topics al arrancar (incluye `cmd.realtime.classification` y `evt.realtime.classification.completed` para el flujo de cámara en vivo).
 - `postgres`: base de datos relacional para metadatos de solicitudes y caras. Puerto 5432.
 - `minio`: almacenamiento compatible S3 para imagenes originales y procesadas. Puertos 9000 y 9001.
 - `minio-init`: crea los buckets `imagenes-raw` e `imagenes-procesadas` al arrancar.
@@ -86,6 +86,58 @@ Censura_Menores/
 - `face-detection`: consume `cmd.face_detection`, descarga la imagen de MinIO, ejecuta el modelo YOLOv8-face y publica `evt.face_detection.completed` con las coordenadas `(x, y, width, height)` de cada rostro detectado.
 - `age-detection`: consume `cmd.age_detection`, descarga la imagen de MinIO, recorta cada cara usando las coordenadas del paso anterior y estima la edad con MobileNetV2 (PyTorch). Publica `evt.age_detection.completed` con `estimated_age`, `is_minor` y `confidence` por cara.
 - `pixelation`: consume `cmd.pixelation`, descarga la imagen original de MinIO, aplica un filtro de pixelado sobre los rostros marcados como menores y sube la imagen procesada al bucket `imagenes-procesadas`.
+- `age-realtime`: variante ligera de `age-detection` para el flujo de cámara en vivo. Consume `cmd.realtime.classification` (crops ya recortados en base64, sin MinIO ni PostgreSQL), ejecuta MobileNetV2 y publica `evt.realtime.classification.completed`.
+
+## Modo cámara en vivo
+
+Además del flujo clásico de subida de una foto, el sistema incluye una vista de detección y pixelado en tiempo real con la webcam (`http://localhost:3000/realtime.html`).
+
+### Arquitectura del flujo en vivo
+
+```
+Navegador                          Backend
+-----------------------            -----------------------------------
+getUserMedia → <video>
+BlazeFace (TF.js) @ 60fps
+Tracker IoU → cara1, cara2…
+   │ cara NUEVA                   ┌─────────────────────────────┐
+   └─► POST /realtime/faces ─────►│ API1 ─► cmd.realtime.classif│
+                                   │         │                   │
+                                   │         ▼                   │
+                                   │  age-realtime (MobileNetV2) │
+                                   │         │                   │
+                                   │         ▼                   │
+                                   │  evt.realtime.classif.compl │
+                                   │         │                   │
+                                   │         ▼                   │
+                                   │  API2 (consumer + SSE)      │
+                                   └─────────────────────────────┘
+   ◄── SSE /realtime/stream/{session_id}
+cache {face_token → is_minor}
+pixelado canvas @ 60fps (menores)
+```
+
+### Topics Kafka nuevos
+
+- `cmd.realtime.classification`: publicado por API1 con `session_id`, `face_token` y el recorte JPEG en base64.
+- `evt.realtime.classification.completed`: publicado por `age-realtime` con `session_id`, `face_token`, `estimated_age`, `is_minor`, `confidence`.
+
+El pipeline clásico (`cmd.face_detection` → … → `evt.storage.completed`) sigue funcionando sin cambios.
+
+### Uso
+
+1. `docker compose up -d` (arranca `age-realtime` entre otros).
+2. Abrir `http://localhost:3000` → pulsar **"Cámara en vivo →"** en la cabecera.
+3. Pulsar **Iniciar cámara** y aceptar permiso del navegador.
+4. Cada cara recibe un ID estable (`cara1`, `cara2`, …) y se clasifica una sola vez; si es menor, se pixela en vivo en cada frame mientras siga visible.
+
+### Decisiones de diseño
+
+- La detección de caras y el tracking corren **en el navegador** (TF.js + BlazeFace). Enviar 60 frames/s al backend sería inviable.
+- El backend solo recibe **un crop por cara nueva** (no reprocesa caras ya clasificadas).
+- La respuesta se entrega por **Server-Sent Events** (`/realtime/stream/{session_id}`) desde API2.
+- No se persiste en PostgreSQL (serían miles de eventos por sesión). Los eventos viven en Kafka (24h de retención) para auditoría.
+- Diagrama: `docs/flujo-tiempo-real.drawio`.
 
 ### Frontend
 

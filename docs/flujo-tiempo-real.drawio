@@ -1,0 +1,71 @@
+<mxfile host="app.diagrams.net" modified="2026-04-23T00:00:00.000Z" agent="manual" version="24.0.0">
+  <diagram name="Flujo tiempo real" id="realtime-flow">
+    <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Edges primero para z-order -->
+        <mxCell id="e1" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="browser" target="api1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1lbl" value="POST /realtime/faces&#10;(multipart: session_id, face_token, crop JPEG)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="150" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e2" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="api1" target="topicCmd">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e3" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="topicCmd" target="ageRt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e4" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="ageRt" target="topicEvt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e5" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="topicEvt" target="api2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e6" style="endArrow=classic;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="api2" target="browser">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6lbl" value="SSE /realtime/stream/{session_id}&#10;(evento por face_token)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="780" y="480" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Nodos -->
+        <mxCell id="browser" value="Navegador&#10;(realtime.html)&#10;- getUserMedia&#10;- BlazeFace (TF.js)&#10;- Tracker IoU (cara1, cara2…)&#10;- Pixelado canvas 60fps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="240" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="api1" value="API1&#10;POST /realtime/faces&#10;(publica a Kafka)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="640" y="130" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="topicCmd" value="Kafka topic&#10;cmd.realtime.classification" style="shape=mxgraph.kubernetes.icon;prIcon=svc;html=1;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="900" y="140" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ageRt" value="age-realtime&#10;(servicio Python)&#10;MobileNetV2 sobre crop&#10;sin MinIO/BD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="120" width="200" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="topicEvt" value="Kafka topic&#10;evt.realtime.classification.completed" style="shape=mxgraph.kubernetes.icon;prIcon=svc;html=1;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="360" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="api2" value="API2&#10;consumer Kafka en hilo&#10;+ SSE /realtime/stream/{id}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="640" y="360" width="220" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="Clave de diseño:&#10;• Detección y tracking en el cliente (60fps, sin saturar Kafka)&#10;• Backend solo recibe caras NUEVAS (una clasificación por face_id)&#10;• Cliente cachea {face_token → is_minor} y pixela en vivo&#10;• Pipeline estático (cmd.face_detection, …) permanece intacto" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="550" width="560" height="120" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

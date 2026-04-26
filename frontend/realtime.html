@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Censura de Menores — Cámara en vivo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #ECEAE6;
+      --surface: #F5F4F1;
+      --border:  #D4D1CD;
+      --text:    #1A1A18;
+      --muted:   #7A7773;
+      --done:    #3E6B4E;
+      --minor:   #B43C28;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+    header h1 { font-size: 15px; font-weight: 600; }
+    header p  { font-size: 13px; color: var(--muted); }
+    nav { margin-left: auto; display: flex; gap: 14px; font-size: 13px; }
+    nav a { color: var(--muted); text-decoration: none; }
+    nav a.active { color: var(--text); font-weight: 600; border-bottom: 1.5px solid var(--text); padding-bottom: 2px; }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 32px;
+      padding: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .video-wrap {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 4/3;
+    }
+    video { display: none; }
+    canvas#rtCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .controls {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 9px 16px;
+      font-family: inherit;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .btn.primary { background: var(--text); color: white; border-color: var(--text); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    #rtStatus { font-size: 12px; color: var(--muted); }
+
+    .panel { display: flex; flex-direction: column; gap: 16px; }
+    .panel-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .face-card {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface);
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .face-card .id { font-weight: 600; font-size: 13px; }
+    .face-card .verdict { font-size: 12px; }
+    .face-card.minor  { border-left: 3px solid var(--minor); }
+    .face-card.adult  { border-left: 3px solid var(--done); }
+    .face-card.pending { border-left: 3px solid var(--border); color: var(--muted); }
+
+    .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin-top: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-box  { width: 12px; height: 12px; border-radius: 2px; border: 1.5px solid; }
+    .legend-box.minor   { border-color: var(--minor); background: rgba(180,60,40,.2); }
+    .legend-box.adult   { border-color: var(--done);  background: rgba(62,107,78,.2); }
+    .legend-box.pending { border-color: var(--muted); background: rgba(122,119,115,.15); }
+
+    .session-info {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: ui-monospace, monospace;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Censura de Menores</h1>
+  <p>Cámara en vivo · detección y pixelado en tiempo real</p>
+  <nav>
+    <a href="index.html">← Foto estática</a>
+    <a href="realtime.html" class="active">Cámara en vivo</a>
+  </nav>
+</header>
+
+<main>
+  <div>
+    <div class="video-wrap">
+      <video id="rtVideo" autoplay playsinline muted></video>
+      <canvas id="rtCanvas"></canvas>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="btnStart">Iniciar cámara</button>
+      <button class="btn" id="btnStop" disabled>Detener</button>
+      <span id="rtStatus">Esperando…</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-box pending"></div> Analizando</div>
+      <div class="legend-item"><div class="legend-box adult"></div> Adulto (no se pixela)</div>
+      <div class="legend-item"><div class="legend-box minor"></div> Menor (pixelado en vivo)</div>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div>
+      <div class="panel-label">Sesión</div>
+      <div class="session-info" id="sessionInfo">—</div>
+    </div>
+    <div>
+      <div class="panel-label">Caras detectadas</div>
+      <div id="faceList" style="display:flex; flex-direction:column; gap:8px; margin-top:8px">
+        <div style="font-size:12px; color:var(--muted)">Ninguna aún.</div>
+      </div>
+    </div>
+    <div>
+      <div class="panel-label">Estadísticas</div>
+      <div id="rtStats" style="font-size:12px; color:var(--muted); margin-top:8px; line-height:1.6">
+        Sin datos.
+      </div>
+    </div>
+    <div>
+      <div class="panel-label" style="display:flex;justify-content:space-between;align-items:center">
+        Log en vivo
+        <button onclick="document.getElementById('rtLog').textContent=''" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:3px;padding:1px 6px;cursor:pointer;font-family:inherit">limpiar</button>
+      </div>
+      <pre id="rtLog" style="font-family:ui-monospace,monospace;font-size:10px;color:var(--muted);margin-top:8px;max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px;">Esperando…</pre>
+    </div>
+  </aside>
+</main>
+
+<!-- TensorFlow.js + BlazeFace via CDN (bundle completo para compatibilidad) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.2.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+<script src="realtime.js"></script>
+</body>
+</html>

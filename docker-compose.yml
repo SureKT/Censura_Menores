@@ -64,6 +64,8 @@ services:
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.age_detection     --partitions 1 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.pixelation        --partitions 1 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.storage           --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.realtime.classification            --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic evt.realtime.classification.completed  --partitions 1 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic events.dead_letter    --partitions 1 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --list
       "
@@ -306,6 +308,25 @@ services:
     networks:
       - bda-net
 
+  age-realtime:
+    build:
+      context: ./services/age_realtime
+      dockerfile: Dockerfile
+    container_name: age-realtime
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      PYTHONUNBUFFERED: "1"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MODEL_PATH: /models/age_model.pth
+    volumes:
+      # Reutiliza el mismo modelo entrenado en age_detection (si existe)
+      - ./services/age_detection:/models:ro
+    networks:
+      - bda-net
+
   api2:
     build:
       context: ./api/api2
@@ -313,11 +334,14 @@ services:
     container_name: api2
     restart: unless-stopped
     depends_on:
+      kafka:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
     environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       PUBLIC_BASE_URL: "http://localhost:8002"
       MINIO_ENDPOINT: minio:9000
       MINIO_EXTERNAL_ENDPOINT: localhost:9000

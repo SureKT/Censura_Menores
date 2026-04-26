@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import os
@@ -8,7 +9,7 @@ from datetime import datetime, timezone
 import psycopg2
 from contextlib import contextmanager
 from psycopg2 import pool as pg_pool
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from kafka import KafkaProducer
 from minio import Minio
@@ -16,6 +17,8 @@ from minio import Minio
 
 APP_NAME = "api-ingesta"
 OUTPUT_TOPIC = "cmd.face_detection"
+REALTIME_TOPIC = "cmd.realtime.classification"
+MAX_REALTIME_BYTES = 300 * 1024  # 300 KB por crop de cara
 
 
 def create_kafka_producer() -> KafkaProducer:
@@ -173,4 +176,56 @@ async def upload_image(file: UploadFile = File(...)) -> dict:
         "image_id": image_id,
         "bucket": raw_bucket,
         "object_key": object_key,
+    }
+
+
+def build_realtime_command(session_id: str, face_token: str, image_b64: str) -> dict:
+    return {
+        "event": {
+            "event_id": str(uuid.uuid4()),
+            "event_type": REALTIME_TOPIC,
+            "event_version": "v1",
+            "occurred_at": datetime.now(timezone.utc).isoformat(),
+            "source": APP_NAME,
+        },
+        "payload": {
+            "session_id": session_id,
+            "face_token": face_token,
+            "image_b64": image_b64,
+        },
+    }
+
+
+@app.post("/realtime/faces", status_code=202)
+async def submit_realtime_face(
+    session_id: str = Form(...),
+    face_token: str = Form(...),
+    image: UploadFile = File(...),
+) -> dict:
+    """Recibe un crop de cara desde la camara del navegador y lo publica a Kafka.
+
+    El frontend hace tracking client-side y solo invoca este endpoint cuando aparece
+    una cara NUEVA (un face_token nuevo). La respuesta se entrega asincronamente via
+    SSE en API2 (/realtime/stream/{session_id}).
+    """
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Solo se aceptan crops de imagen.")
+
+    content = await image.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Crop vacio.")
+    if len(content) > MAX_REALTIME_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Crop demasiado grande (max {MAX_REALTIME_BYTES // 1024} KB).",
+        )
+
+    image_b64 = base64.b64encode(content).decode("ascii")
+    cmd = build_realtime_command(session_id, face_token, image_b64)
+    producer.send(REALTIME_TOPIC, cmd)
+
+    return {
+        "accepted": True,
+        "session_id": session_id,
+        "face_token": face_token,
     }
