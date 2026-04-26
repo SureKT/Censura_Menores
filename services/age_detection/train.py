@@ -2,16 +2,17 @@
 Entrena MobileNetV2 para regresion de edad.
 
 Mejoras respecto a la version anterior:
-  - Aumento de datos mas rico (rotacion, perspectiva, blur, erasing)
+  - Aumento de datos moderado (rotacion, jitter, erasing) sin distorsiones agresivas
   - Split estratificado por franja de edad
   - WeightedRandomSampler para compensar el desbalance adultos/menores
   - BoundaryAwareLoss: HuberLoss + penalizacion en el umbral 18 anos
-  - Entrenamiento en 2 fases: backbone congelado -> fine-tuning completo
+  - Entrenamiento en 2 fases: backbone congelado (8 epocas) -> fine-tuning completo
   - Scheduler CosineAnnealingLR + AdamW con LR diferenciado
-  - AMP (FP16) en GPU, barra de progreso por batch, tiempos por epoca
+  - AMP (FP16) en GPU con gradient clipping (max_norm=5)
+  - Barra de progreso por batch, tiempos por epoca, normas de gradiente
 
 Uso:
-    python train.py --dataset ../../dataset/face_age --epochs 20
+    python train.py --dataset ../../dataset/face_age --epochs 25
 """
 import argparse
 import random
@@ -57,14 +58,12 @@ TRANSFORM_TRAIN = transforms.Compose([
     transforms.Resize((256, 256)),
     transforms.RandomCrop(224),
     transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(15),
-    transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
+    transforms.RandomRotation(10),
     transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.05),
-    transforms.RandomGrayscale(p=0.1),
-    transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.5)),
+    transforms.RandomGrayscale(p=0.05),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    transforms.RandomErasing(p=0.2, scale=(0.02, 0.15)),
+    transforms.RandomErasing(p=0.1, scale=(0.02, 0.10)),
 ])
 
 TRANSFORM_VAL = transforms.Compose([
@@ -236,10 +235,13 @@ def run_epoch(
                 loss, huber, boundary = criterion(preds, ages)
             if use_amp:
                 scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 scaler.step(optimizer)
                 scaler.update()
             else:
                 loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 optimizer.step()
 
             b = len(imgs)
@@ -424,10 +426,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Entrena el modelo de estimacion de edad")
     parser.add_argument("--dataset",       default="../../dataset/face_age")
     parser.add_argument("--output",        default="age_model.pth")
-    parser.add_argument("--epochs",        type=int,   default=20)
+    parser.add_argument("--epochs",        type=int,   default=25)
     parser.add_argument("--batch",         type=int,   default=32)
     parser.add_argument("--lr",            type=float, default=1e-3)
-    parser.add_argument("--freeze-epochs", type=int,   default=5)
+    parser.add_argument("--freeze-epochs", type=int,   default=8)
     args = parser.parse_args()
 
     train(args.dataset, args.output, args.epochs, args.batch, args.lr, args.freeze_epochs)
