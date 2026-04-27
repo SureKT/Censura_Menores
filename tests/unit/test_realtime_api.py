@@ -1,8 +1,29 @@
 """Tests de la logica pura de la variante de tiempo real en API1.
 
+Se carga el fichero por ruta para evitar colision con otros main.py del proyecto.
 No toca Kafka ni la red; solo valida el builder del comando.
 """
-from main import REALTIME_TOPIC, build_realtime_command
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+API1_DIR = ROOT / "api" / "api1"
+
+if str(API1_DIR) not in sys.path:
+    sys.path.insert(0, str(API1_DIR))
+
+spec = importlib.util.spec_from_file_location("api1_main", API1_DIR / "main.py")
+api1 = importlib.util.module_from_spec(spec)
+try:
+    spec.loader.exec_module(api1)
+except Exception as exc:  # pragma: no cover
+    pytest.skip(f"No se pudo cargar api1/main.py (posible falta de deps): {exc}", allow_module_level=True)
+
+REALTIME_TOPIC = api1.REALTIME_TOPIC
+build_realtime_command = api1.build_realtime_command
 
 
 def test_build_realtime_command_estructura():

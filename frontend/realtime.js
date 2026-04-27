@@ -9,8 +9,9 @@ const PIXEL_BLOCK          = 12;
 const CROP_JPEG_QUALITY    = 0.82;
 const TRACK_LOST_FRAMES    = 20;
 const RESEND_TIMEOUT_MS    = 5000;
-const MIN_FACE_PROBABILITY = 0.90;  // descartar detecciones con baja confianza (reduce falsos positivos)
+const MIN_FACE_PROBABILITY = 0.90;  // descartar detecciones con baja confianza
 const VISIBLE_FRAMES       = 3;     // solo dibujar/pixelar si la cara se vio en los últimos N frames
+const MIN_CONFIRM_FRAMES   = 6;     // frames consecutivos necesarios para considerar la cara real (anti-parpadeo)
 
 const videoEl   = document.getElementById('rtVideo');
 const canvasEl  = document.getElementById('rtCanvas');
@@ -250,22 +251,31 @@ function matchAndTrack(currBoxes) {
     if (bestIdx >= 0) {
       face.bbox = currBoxes[bestIdx];
       face.lastSeen = nowFrame;
+      face.confirmedFrames = (face.confirmedFrames || 0) + 1;
       used.add(bestIdx);
     }
   }
 
-  // 2) Detecciones sin match → cara nueva
+  // 2) Detecciones sin match → cara nueva (aún no confirmada)
   currBoxes.forEach((bb, i) => {
     if (used.has(i)) return;
     const id = `cara${nextFaceNum++}`;
     const face = { id, bbox: bb, lastSeen: nowFrame, token: uuid(),
-      status: 'new', isMinor: null, age: null, confidence: null, inflightTs: 0 };
+      status: 'new', isMinor: null, age: null, confidence: null, inflightTs: 0,
+      confirmedFrames: 1 };
     tracked.set(id, face);
-    log(`Nueva cara: ${id} bbox=(${Math.round(bb.x)},${Math.round(bb.y)},${Math.round(bb.w)}x${Math.round(bb.h)})`);
-    sendFaceToBackend(face);
+    log(`Nueva cara candidata: ${id} bbox=(${Math.round(bb.x)},${Math.round(bb.y)},${Math.round(bb.w)}x${Math.round(bb.h)}) [1/${MIN_CONFIRM_FRAMES} frames]`);
   });
 
-  // 3) Descartar caras perdidas
+  // 3) Confirmar caras nuevas que llevan suficientes frames seguidos
+  for (const face of tracked.values()) {
+    if (face.status === 'new' && face.confirmedFrames >= MIN_CONFIRM_FRAMES) {
+      log(`Cara confirmada: ${face.id} (${face.confirmedFrames} frames) → enviando al backend`);
+      sendFaceToBackend(face);
+    }
+  }
+
+  // 4) Descartar caras perdidas
   for (const [id, face] of tracked) {
     if (nowFrame - face.lastSeen > TRACK_LOST_FRAMES) {
       log(`Cara perdida del tracking: ${id}`);
@@ -273,7 +283,7 @@ function matchAndTrack(currBoxes) {
     }
   }
 
-  // 4) Reintentar pendientes sin respuesta
+  // 5) Reintentar pendientes sin respuesta
   const now = performance.now();
   for (const face of tracked.values()) {
     if (face.status === 'pending' && now - face.inflightTs > RESEND_TIMEOUT_MS) {
@@ -305,9 +315,9 @@ function pixelateRegion(x, y, w, h) {
 function drawOverlays() {
   ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
 
-  // Solo actuar sobre caras vistas recientemente (evita cajas/pixelado fantasma)
+  // Solo actuar sobre caras vistas recientemente Y confirmadas (evita cajas/pixelado fantasma)
   const visibleFaces = [...tracked.values()].filter(
-    f => frameCount - f.lastSeen <= VISIBLE_FRAMES
+    f => frameCount - f.lastSeen <= VISIBLE_FRAMES && f.confirmedFrames >= MIN_CONFIRM_FRAMES
   );
 
   // Pixelar menores primero (debajo de los bordes)

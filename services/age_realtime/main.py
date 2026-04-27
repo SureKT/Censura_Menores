@@ -47,7 +47,7 @@ def send_to_dlq(producer, original_msg: dict, error: Exception):
             },
             "error": {"type": type(error).__name__, "message": str(error)},
             "original_message": original_msg,
-        })
+        }).get(timeout=5)
     except Exception as dlq_exc:
         print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
 
@@ -134,7 +134,7 @@ def run():
                 raise ValueError("payload.image_b64 vacio")
             age, is_minor, confidence = classify(image_b64, model)
             output = build_output_event(msg.value, age, is_minor, confidence)
-            producer.send(OUTPUT_TOPIC, output)
+            producer.send(OUTPUT_TOPIC, output).get(timeout=10)
             sid = payload.get("session_id", "?")
             tok = payload.get("face_token", "?")
             print(f"[{APP_NAME}] {sid}/{tok} -> edad={age} menor={is_minor} conf={confidence}")

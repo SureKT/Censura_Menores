@@ -51,7 +51,7 @@ def send_to_dlq(producer, original_msg: dict, error: Exception):
             },
             "error": {"type": type(error).__name__, "message": str(error)},
             "original_message": original_msg,
-        })
+        }).get(timeout=5)
     except Exception as dlq_exc:
         print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
 
