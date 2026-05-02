@@ -162,6 +162,7 @@ def run():
 
     print(f"[face_detection] Escuchando {INPUT_TOPIC}...")
     for msg in consumer:
+        t_start = time.time()
         try:
             cmd_event = msg.value
             payload = cmd_event["payload"]
@@ -170,7 +171,8 @@ def run():
             output_event = build_output_event(cmd_event, faces)
             producer.send(OUTPUT_TOPIC, output_event).get(timeout=10)
             request_id = cmd_event["event"]["trace"]["request_id"]
-            print(f"[face_detection] {len(faces)} rostros detectados para request_id={request_id}")
+            elapsed_ms = (time.time() - t_start) * 1000
+            print(f"[face_detection] {len(faces)} rostros detectados para request_id={request_id} ({elapsed_ms:.0f}ms)")
         except Exception as exc:
             print(f"[face_detection] Error procesando mensaje: {exc}")
             send_to_dlq(producer, msg.value, exc)

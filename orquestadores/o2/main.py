@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import time
@@ -8,6 +9,8 @@ import psycopg2
 from contextlib import contextmanager
 from psycopg2 import pool as pg_pool
 from kafka import KafkaConsumer, KafkaProducer
+from minio import Minio
+from PIL import Image
 
 
 APP_NAME = "orq-analisis"
@@ -45,6 +48,14 @@ def get_db_connection():
         _get_pool().putconn(conn)
 
 
+def create_minio_client() -> Minio:
+    endpoint   = os.getenv("MINIO_ENDPOINT",   "minio:9000")
+    access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
+    secure     = os.getenv("MINIO_SECURE", "false").lower() == "true"
+    return Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
+
+
 def send_to_dlq(producer, original_msg: dict, error: Exception):
     try:
         producer.send(DLQ_TOPIC, {
@@ -60,6 +71,40 @@ def send_to_dlq(producer, original_msg: dict, error: Exception):
         })
     except Exception as dlq_exc:
         print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
+
+
+def crop_and_upload_face(
+    minio_client: Minio,
+    image: Image.Image,
+    face: dict,
+    guid: str,
+    face_id: int,
+    out_bucket: str,
+) -> str:
+    """Recorta una cara con 10% de padding y la sube a MinIO. Devuelve la URL."""
+    img_w, img_h = image.size
+    x, y, w, h = face.get("x", 0), face.get("y", 0), face.get("width", 0), face.get("height", 0)
+    pad_x = int(w * 0.10)
+    pad_y = int(h * 0.10)
+    left   = max(0, x - pad_x)
+    top    = max(0, y - pad_y)
+    right  = min(img_w, x + w + pad_x)
+    bottom = min(img_h, y + h + pad_y)
+
+    crop = image.crop((left, top, right, bottom))
+    buf = io.BytesIO()
+    crop.save(buf, format="JPEG", quality=90)
+    buf_bytes = buf.getvalue()
+
+    object_key = f"caras/{guid}/{face_id}.jpg"
+    minio_client.put_object(
+        out_bucket,
+        object_key,
+        io.BytesIO(buf_bytes),
+        len(buf_bytes),
+        content_type="image/jpeg",
+    )
+    return f"{out_bucket}/{object_key}"
 
 
 def build_age_command(face_event: dict) -> dict:
@@ -86,17 +131,27 @@ def build_age_command(face_event: dict) -> dict:
     }
 
 
-def process_message(face_event: dict, producer: KafkaProducer):
-    trace = face_event["event"]["trace"]
+def process_message(face_event: dict, producer: KafkaProducer, minio_client: Minio):
+    t_start = time.time()
+    trace   = face_event["event"]["trace"]
     payload = face_event["payload"]
-    guid = trace["request_id"]
-    faces = payload.get("faces", [])
+    guid    = trace["request_id"]
+    faces   = payload.get("faces", [])
     total_faces = payload.get("total_faces", len(faces))
-    now = datetime.now(timezone.utc)
+    now     = datetime.now(timezone.utc)
+    out_bucket = os.getenv("MINIO_PROCESSED_BUCKET", "imagenes-procesadas")
+
+    # Descargar imagen original para generar crops de cada cara
+    response = minio_client.get_object(payload["bucket"], payload["object_key"])
+    try:
+        image_bytes = response.read()
+    finally:
+        response.close()
+        response.release_conn()
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # Id_Imagen se numera desde 1 dentro de cada solicitud
             cur.execute(
                 "SELECT COALESCE(MAX(Id_Imagen), 0) FROM Imagenes WHERE GUID_Solicitud = %s",
                 (guid,),
@@ -104,16 +159,26 @@ def process_message(face_event: dict, producer: KafkaProducer):
             current_max = cur.fetchone()[0]
 
             for idx, face in enumerate(faces, start=1):
+                face_id = current_max + idx
+                try:
+                    url_cara = crop_and_upload_face(
+                        minio_client, image, face, guid, face_id, out_bucket
+                    )
+                except Exception as crop_exc:
+                    print(f"[o2] {guid}: error guardando cara {face_id}: {crop_exc}")
+                    url_cara = None
+
                 cur.execute(
                     """
                     INSERT INTO Imagenes (
-                        GUID_Solicitud, Id_Imagen,
+                        GUID_Solicitud, Id_Imagen, URL_Imagen,
                         Imagen_X, Imagen_Y, Imagen_Ancho, Imagen_Alto
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         guid,
-                        current_max + idx,
+                        face_id,
+                        url_cara,
                         face.get("x", 0),
                         face.get("y", 0),
                         face.get("width", 0),
@@ -130,17 +195,20 @@ def process_message(face_event: dict, producer: KafkaProducer):
                     Estado = %s
                 WHERE GUID_Solicitud = %s
                 """,
-                (now, now, now, "EN_ANALISIS_EDAD", guid),
+                (now, now, now, "CARAS_DETECTADAS", guid),
             )
         conn.commit()
 
     output_cmd = build_age_command(face_event)
     producer.send(OUTPUT_TOPIC, output_cmd).get(timeout=10)
-    print(f"[o2] {guid}: {total_faces} caras registradas, cmd.age_detection publicado.")
+
+    elapsed_ms = (time.time() - t_start) * 1000
+    print(f"[o2] {guid}: {total_faces} caras registradas y recortadas → cmd.age_detection ({elapsed_ms:.0f}ms)")
 
 
 def run():
     bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
+    minio_client = create_minio_client()
 
     producer = consumer = None
     for attempt in range(12):
@@ -167,7 +235,7 @@ def run():
     print("[o2] Escuchando evt.face_detection.completed...")
     for msg in consumer:
         try:
-            process_message(msg.value, producer)
+            process_message(msg.value, producer, minio_client)
         except Exception as exc:
             print(f"[o2] Error procesando mensaje: {exc}")
             send_to_dlq(producer, msg.value, exc)

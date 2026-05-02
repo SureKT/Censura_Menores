@@ -11,10 +11,9 @@ from kafka import KafkaConsumer, KafkaProducer
 
 
 APP_NAME = "orq-decision"
-DLQ_TOPIC   = "events.dead_letter"
-INPUT_TOPIC = "evt.age_detection.completed"
-PIXELATION_TOPIC = "cmd.pixelation"
-STORAGE_TOPIC = "cmd.storage"
+DLQ_TOPIC    = "events.dead_letter"
+INPUT_TOPIC  = "evt.age_detection.completed"
+OUTPUT_TOPIC = "cmd.pixelation"
 GROUP_ID = "o3-group"
 
 _pool: pg_pool.SimpleConnectionPool | None = None
@@ -63,13 +62,13 @@ def send_to_dlq(producer, original_msg: dict, error: Exception):
         print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
 
 
-def build_command(age_event: dict, target_topic: str, minors_count: int) -> dict:
-    trace = age_event["event"]["trace"]
+def build_pixelation_command(age_event: dict, minors_count: int) -> dict:
+    trace   = age_event["event"]["trace"]
     payload = age_event["payload"]
     return {
         "event": {
             "event_id": str(uuid.uuid4()),
-            "event_type": target_topic,
+            "event_type": OUTPUT_TOPIC,
             "event_version": "v1",
             "occurred_at": datetime.now(timezone.utc).isoformat(),
             "trace": {
@@ -89,9 +88,10 @@ def build_command(age_event: dict, target_topic: str, minors_count: int) -> dict
 
 
 def process_message(age_event: dict, producer: KafkaProducer):
-    trace = age_event["event"]["trace"]
-    guid = trace["request_id"]
-    faces = age_event["payload"].get("faces", [])
+    t_start = time.time()
+    trace   = age_event["event"]["trace"]
+    guid    = trace["request_id"]
+    faces   = age_event["payload"].get("faces", [])
     minors_count = sum(1 for f in faces if f.get("is_minor"))
     now = datetime.now(timezone.utc)
 
@@ -100,8 +100,7 @@ def process_message(age_event: dict, producer: KafkaProducer):
             # Actualizar Mayor_18 y score en cada fila de Imagenes
             for idx, face in enumerate(faces, start=1):
                 mayor_18 = not face.get("is_minor", False)
-                # score: confianza de la prediccion (el stub no la provee; se usa 0.9)
-                score = face.get("confidence", 0.9)
+                score    = face.get("confidence", 0.9)
                 cur.execute(
                     """
                     UPDATE Imagenes
@@ -117,33 +116,24 @@ def process_message(age_event: dict, producer: KafkaProducer):
                     (mayor_18, score, guid, guid, idx - 1),
                 )
 
-            if minors_count > 0:
-                cur.execute(
-                    """
-                    UPDATE Solicitud
-                    SET Fin_edad = %s,
-                        Inicio_Pixelado = %s,
-                        Estado = %s
-                    WHERE GUID_Solicitud = %s
-                    """,
-                    (now, now, "PENDIENTE_PIXELADO", guid),
-                )
-            else:
-                cur.execute(
-                    """
-                    UPDATE Solicitud
-                    SET Fin_edad = %s,
-                        Estado = %s
-                    WHERE GUID_Solicitud = %s
-                    """,
-                    (now, "PENDIENTE_STORAGE", guid),
-                )
+            cur.execute(
+                """
+                UPDATE Solicitud
+                SET Fin_edad = %s,
+                    Inicio_Pixelado = %s,
+                    Estado = %s
+                WHERE GUID_Solicitud = %s
+                """,
+                (now, now, "EDAD_CALCULADA", guid),
+            )
         conn.commit()
 
-    target_topic = PIXELATION_TOPIC if minors_count > 0 else STORAGE_TOPIC
-    output_cmd = build_command(age_event, target_topic, minors_count)
-    producer.send(target_topic, output_cmd).get(timeout=10)
-    print(f"[o3] {guid} -> {target_topic} ({minors_count} menores)")
+    # Siempre pasa por pixelation para generar imagen con marcos
+    cmd = build_pixelation_command(age_event, minors_count)
+    producer.send(OUTPUT_TOPIC, cmd).get(timeout=10)
+
+    elapsed_ms = (time.time() - t_start) * 1000
+    print(f"[o3] {guid} → cmd.pixelation ({minors_count} menores de {len(faces)}) ({elapsed_ms:.0f}ms)")
 
 
 def run():

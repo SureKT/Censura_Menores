@@ -132,7 +132,7 @@ async function loadDetector() {
 async function startCamera() {
   log('Solicitando permiso de cámara...');
   stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: { ideal: 'user' } },
     audio: false,
   });
   videoEl.srcObject = stream;

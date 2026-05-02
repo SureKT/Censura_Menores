@@ -153,7 +153,7 @@ async def upload_image(file: UploadFile = File(...)) -> dict:
                     GUID_Solicitud, URL_Imagen_Original, Inicio_Solicitud, Estado
                 ) VALUES (%s, %s, %s, %s)
                 """,
-                (request_id, url_original, now, "RECIBIDO"),
+                (request_id, url_original, now, "CREADA"),
             )
         conn.commit()
 

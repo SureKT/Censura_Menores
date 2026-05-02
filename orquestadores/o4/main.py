@@ -10,11 +10,11 @@ from psycopg2 import pool as pg_pool
 from kafka import KafkaConsumer, KafkaProducer
 
 
-APP_NAME = "orq-finalizacion"
-INPUT_TOPICS = ["evt.pixelation.completed", "cmd.storage"]
+APP_NAME    = "orq-finalizacion"
+INPUT_TOPIC = "evt.pixelation.completed"
 OUTPUT_TOPIC = "evt.storage.completed"
 DLQ_TOPIC   = "events.dead_letter"
-GROUP_ID = "o4-group"
+GROUP_ID    = "o4-group"
 
 _pool: pg_pool.SimpleConnectionPool | None = None
 
@@ -62,8 +62,8 @@ def send_to_dlq(producer, original_msg: dict, error: Exception):
         print(f"[{APP_NAME}] No se pudo enviar a DLQ: {dlq_exc}")
 
 
-def build_storage_event(input_event: dict, pixelation_applied: bool) -> dict:
-    trace = input_event["event"]["trace"]
+def build_storage_event(input_event: dict) -> dict:
+    trace   = input_event["event"]["trace"]
     payload = input_event["payload"]
     return {
         "event": {
@@ -78,69 +78,58 @@ def build_storage_event(input_event: dict, pixelation_applied: bool) -> dict:
             "source": APP_NAME,
         },
         "payload": {
-            "input_bucket": payload.get("input_bucket", payload.get("bucket", "")),
-            "input_object_key": payload.get("object_key", ""),
-            "output_bucket": payload.get("output_bucket", ""),
-            "output_object_key": payload.get("output_object_key", ""),
-            "pixelated_faces_count": payload.get("pixelated_faces_count", 0),
-            "total_faces_count": payload.get("total_faces", 0),
-            "pixelation_applied": pixelation_applied,
+            "input_bucket":           payload.get("bucket", ""),
+            "input_object_key":       payload.get("object_key", ""),
+            "output_bucket":          payload.get("output_bucket", ""),
+            "output_object_key":      payload.get("output_object_key", ""),
+            "marcos_bucket":          payload.get("marcos_bucket", ""),
+            "marcos_object_key":      payload.get("marcos_object_key", ""),
+            "pixelated_faces_count":  payload.get("pixelated_faces_count", 0),
+            "total_faces_count":      payload.get("total_faces", 0),
         },
     }
 
 
 def process_message(input_event: dict, producer: KafkaProducer):
-    trace = input_event["event"]["trace"]
-    guid = trace["request_id"]
-    event_type = input_event["event"]["event_type"]
+    t_start = time.time()
+    trace   = input_event["event"]["trace"]
+    guid    = trace["request_id"]
     payload = input_event["payload"]
-    now = datetime.now(timezone.utc)
-    pixelation_applied = event_type == "evt.pixelation.completed"
+    now     = datetime.now(timezone.utc)
 
-    # URL de la imagen terminada
-    if pixelation_applied:
-        out_bucket = payload.get("output_bucket", "imagenes-procesadas")
-        out_key    = payload.get("output_object_key", "")
-    else:
-        # Sin menores: la imagen original es el resultado
-        out_bucket = payload.get("bucket", "imagenes-raw")
-        out_key    = payload.get("object_key", "")
+    # URL de la imagen procesada (pixelada o original si no habia menores)
+    out_bucket = payload.get("output_bucket", "imagenes-procesadas")
+    out_key    = payload.get("output_object_key", "")
     url_terminada = f"{out_bucket}/{out_key}" if out_key else None
+
+    # URL de la imagen con marcos (siempre generada por pixelation)
+    marcos_bucket = payload.get("marcos_bucket", "")
+    marcos_key    = payload.get("marcos_object_key", "")
+    url_marcos = f"{marcos_bucket}/{marcos_key}" if marcos_key else None
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            if pixelation_applied:
-                cur.execute(
-                    """
-                    UPDATE Solicitud
-                    SET Fin_Pixelado = COALESCE(Fin_Pixelado, %s),
-                        Inicio_Almacenamiento_Solicitud = COALESCE(Inicio_Almacenamiento_Solicitud, %s),
-                        Fin_Almacenamiento_Solicitud = %s,
-                        Fin_Solicitud = %s,
-                        URL_Imagen_Terminada = %s,
-                        Estado = %s
-                    WHERE GUID_Solicitud = %s
-                    """,
-                    (now, now, now, now, url_terminada, "COMPLETED", guid),
-                )
-            else:
-                cur.execute(
-                    """
-                    UPDATE Solicitud
-                    SET Inicio_Almacenamiento_Solicitud = COALESCE(Inicio_Almacenamiento_Solicitud, %s),
-                        Fin_Almacenamiento_Solicitud = %s,
-                        Fin_Solicitud = %s,
-                        URL_Imagen_Terminada = %s,
-                        Estado = %s
-                    WHERE GUID_Solicitud = %s
-                    """,
-                    (now, now, now, url_terminada, "COMPLETED", guid),
-                )
+            cur.execute(
+                """
+                UPDATE Solicitud
+                SET Fin_Pixelado                  = COALESCE(Fin_Pixelado, %s),
+                    Inicio_Almacenamiento_Solicitud = COALESCE(Inicio_Almacenamiento_Solicitud, %s),
+                    Fin_Almacenamiento_Solicitud    = %s,
+                    Fin_Solicitud                   = %s,
+                    URL_Imagen_Terminada            = %s,
+                    URL_Imagen_Marcos               = %s,
+                    Estado                          = %s
+                WHERE GUID_Solicitud = %s
+                """,
+                (now, now, now, now, url_terminada, url_marcos, "COMPLETADA", guid),
+            )
         conn.commit()
 
-    storage_event = build_storage_event(input_event, pixelation_applied)
+    storage_event = build_storage_event(input_event)
     producer.send(OUTPUT_TOPIC, storage_event).get(timeout=10)
-    print(f"[o4] {guid} finalizado desde {event_type}")
+
+    elapsed_ms = (time.time() - t_start) * 1000
+    print(f"[o4] {guid}: COMPLETADA (pixelada={bool(out_key)}, marcos={bool(url_marcos)}) ({elapsed_ms:.0f}ms)")
 
 
 def run():
@@ -154,7 +143,7 @@ def run():
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             )
             consumer = KafkaConsumer(
-                *INPUT_TOPICS,
+                INPUT_TOPIC,
                 bootstrap_servers=bootstrap,
                 group_id=GROUP_ID,
                 auto_offset_reset="earliest",
@@ -168,7 +157,7 @@ def run():
     else:
         raise RuntimeError("[o4] No se pudo conectar a Kafka.")
 
-    print("[o4] Escuchando evt.pixelation.completed y cmd.storage...")
+    print("[o4] Escuchando evt.pixelation.completed...")
     for msg in consumer:
         try:
             process_message(msg.value, producer)

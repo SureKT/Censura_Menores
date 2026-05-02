@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS Solicitud (
     GUID_Solicitud VARCHAR(255) PRIMARY KEY,
     URL_Imagen_Original VARCHAR(255),
     URL_Imagen_Terminada VARCHAR(255),
+    URL_Imagen_Marcos VARCHAR(255),
     Inicio_Solicitud TIMESTAMP,
     Fin_Solicitud TIMESTAMP,
     Inicio_Deteccion_Caras TIMESTAMP,

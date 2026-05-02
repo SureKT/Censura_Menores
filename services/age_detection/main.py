@@ -154,12 +154,12 @@ def run():
 
     print("[age_detection] Escuchando cmd.age_detection...")
     for msg in consumer:
+        t_start = time.time()
         faces = None
         try:
             faces = process_message(msg.value, model, minio_client)
         except Exception as exc:
             print(f"[age_detection] Error procesando imagen: {exc}. Publicando evento sin estimación de edad.")
-            # Pasar las caras originales sin estimación (adultos por defecto para no pixelar en falso)
             faces = [
                 {**face, "estimated_age": 30, "is_minor": False, "confidence": -1.0}
                 for face in msg.value.get("payload", {}).get("faces", [])
@@ -170,7 +170,8 @@ def run():
             producer.send(OUTPUT_TOPIC, output).get(timeout=10)
             rid = output["event"]["trace"]["request_id"]
             minors = sum(1 for f in faces if f["is_minor"])
-            print(f"[age_detection] {rid} → {len(faces)} caras, {minors} menores")
+            elapsed_ms = (time.time() - t_start) * 1000
+            print(f"[age_detection] {rid} → {len(faces)} caras, {minors} menores ({elapsed_ms:.0f}ms)")
         except Exception as exc:
             print(f"[age_detection] Error publicando evento: {exc}")
             send_to_dlq(producer, msg.value, exc)

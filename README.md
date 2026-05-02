@@ -65,27 +65,27 @@ Censura_Menores/
 ### Infraestructura
 
 - `kafka`: broker de eventos en modo KRaft (sin ZooKeeper). Puerto 9092.
-- `kafka-init`: crea los 11 topics al arrancar (incluye `cmd.realtime.classification` y `evt.realtime.classification.completed` para el flujo de cámara en vivo).
+- `kafka-init`: crea los 10 topics al arrancar (incluye `cmd.realtime.classification` y `evt.realtime.classification.completed` para el flujo de cámara en vivo).
 - `postgres`: base de datos relacional para metadatos de solicitudes y caras. Puerto 5432.
 - `minio`: almacenamiento compatible S3 para imagenes originales y procesadas. Puertos 9000 y 9001.
 - `minio-init`: crea los buckets `imagenes-raw` e `imagenes-procesadas` al arrancar.
 
 ### APIs REST
 
-- `api1`: API de ingesta (FastAPI). Acepta `POST /images`, sube la imagen a MinIO, inserta la solicitud en PostgreSQL con estado `RECIBIDO` y publica `cmd.face_detection` en Kafka. Puerto 8001.
-- `api2`: API de consulta (FastAPI). Expone `GET /solicitudes/{guid}` con el estado del pipeline, coordenadas de caras detectadas y URL prefirmada de MinIO para descargar la imagen procesada. Puerto 8002.
+- `api1`: API de ingesta (FastAPI). Acepta `POST /images`, sube la imagen a MinIO, inserta la solicitud en PostgreSQL con estado `CREADA` y publica `cmd.face_detection` en Kafka. Puerto 8001.
+- `api2`: API de consulta (FastAPI). Expone `GET /solicitudes/{guid}` con el estado del pipeline, coordenadas de caras y URLs de descarga. También expone `GET /solicitudes/{guid}/marcos` (imagen con bounding boxes) y `GET /solicitudes/{guid}/caras/{id}` (recorte de cara individual). Puerto 8002.
 
 ### Orquestadores
 
-- `o2`: orquestador de analisis. Consume `evt.face_detection.completed`, inserta las filas en la tabla `Imagenes` con coordenadas de cada cara y publica `cmd.age_detection`.
-- `o3`: orquestador de decision. Consume `evt.age_detection.completed`, actualiza `Mayor_18` y `score` en la tabla `Imagenes` y decide si publicar `cmd.pixelation` (si hay menores) o `cmd.storage` (si no hay menores).
-- `o4`: orquestador de finalizacion. Consume `evt.pixelation.completed` o `cmd.storage`, actualiza todos los timestamps finales, guarda la URL de la imagen terminada y marca la solicitud como `COMPLETED`.
+- `o2`: orquestador de analisis. Consume `evt.face_detection.completed`, inserta las filas en la tabla `Imagenes` con coordenadas y recorte de cada cara (MinIO), actualiza estado a `CARAS_DETECTADAS` y publica `cmd.age_detection`.
+- `o3`: orquestador de decision. Consume `evt.age_detection.completed`, actualiza `Mayor_18` y `score` en la tabla `Imagenes`, actualiza estado a `EDAD_CALCULADA` y publica `cmd.pixelation` (siempre, incluso si no hay menores).
+- `o4`: orquestador de finalizacion. Consume `evt.pixelation.completed`, actualiza todos los timestamps finales, guarda la URL de la imagen terminada y la imagen con marcos, y marca la solicitud como `COMPLETADA`.
 
 ### Servicios de procesamiento
 
 - `face-detection`: consume `cmd.face_detection`, descarga la imagen de MinIO, ejecuta el modelo YOLOv8-face y publica `evt.face_detection.completed` con las coordenadas `(x, y, width, height)` de cada rostro detectado.
 - `age-detection`: consume `cmd.age_detection`, descarga la imagen de MinIO, recorta cada cara usando las coordenadas del paso anterior y estima la edad con MobileNetV2 (PyTorch). Publica `evt.age_detection.completed` con `estimated_age`, `is_minor` y `confidence` por cara.
-- `pixelation`: consume `cmd.pixelation`, descarga la imagen original de MinIO, aplica un filtro de pixelado sobre los rostros marcados como menores y sube la imagen procesada al bucket `imagenes-procesadas`.
+- `pixelation`: consume `cmd.pixelation`, descarga la imagen original de MinIO, genera dos versiones: la imagen pixelada (menores) y la imagen con bounding boxes + etiquetas (edad/confianza) sobre todas las caras. Sube ambas al bucket `imagenes-procesadas` y publica `evt.pixelation.completed`.
 - `age-realtime`: variante ligera de `age-detection` para el flujo de cámara en vivo. Consume `cmd.realtime.classification` (crops ya recortados en base64, sin MinIO ni PostgreSQL), ejecuta MobileNetV2 y publica `evt.realtime.classification.completed`.
 
 ## Modo cámara en vivo
@@ -215,19 +215,20 @@ Topics definidos:
 - `evt.age_detection.completed`
 - `cmd.pixelation`
 - `evt.pixelation.completed`
-- `cmd.storage`
 - `evt.storage.completed`
+- `cmd.realtime.classification`
+- `evt.realtime.classification.completed`
 - `events.dead_letter`
 
 Flujo de referencia:
-1. Cliente sube imagen via `POST /images` (API1).
+1. Cliente sube imagen via `POST /images` (API1). Estado: `CREADA`.
 2. API1 guarda en MinIO, registra en PostgreSQL y publica `cmd.face_detection`.
 3. `face-detection` detecta caras y publica `evt.face_detection.completed`.
-4. O2 registra caras en BD y publica `cmd.age_detection`.
+4. O2 registra caras en BD (con recortes en MinIO), estado `CARAS_DETECTADAS`, publica `cmd.age_detection`.
 5. `age-detection` estima edades y publica `evt.age_detection.completed`.
-6. O3 actualiza BD y publica `cmd.pixelation` (menores) o `cmd.storage` (sin menores).
-7. `pixelation` pixela caras y publica `evt.pixelation.completed`.
-8. O4 marca la solicitud como `COMPLETED` y guarda la URL final.
+6. O3 actualiza `Mayor_18`/`score` en BD, estado `EDAD_CALCULADA`, publica `cmd.pixelation` (siempre).
+7. `pixelation` pixela menores, genera imagen con marcos, publica `evt.pixelation.completed`.
+8. O4 marca la solicitud como `COMPLETADA`, guarda URL imagen terminada y URL imagen con marcos.
 9. Cliente consulta resultado via `GET /solicitudes/{guid}` (API2).
 10. Errores no recuperables se envian a `events.dead_letter`.
 
@@ -238,8 +239,9 @@ Flujo de referencia:
 |---|---|---|
 | GUID_Solicitud | VARCHAR PK | Identificador unico de la solicitud |
 | URL_Imagen_Original | VARCHAR | Ruta en MinIO de la imagen original |
-| URL_Imagen_Terminada | VARCHAR | Ruta en MinIO de la imagen procesada |
-| Estado | VARCHAR | RECIBIDO / EN_ANALISIS_EDAD / PENDIENTE_PIXELADO / PENDIENTE_STORAGE / COMPLETED |
+| URL_Imagen_Terminada | VARCHAR | Ruta en MinIO de la imagen pixelada |
+| URL_Imagen_Marcos | VARCHAR | Ruta en MinIO de la imagen con bounding boxes |
+| Estado | VARCHAR | CREADA / CARAS_DETECTADAS / EDAD_CALCULADA / COMPLETADA |
 | Inicio_Solicitud | TIMESTAMP | Inicio del pipeline |
 | Fin_Solicitud | TIMESTAMP | Fin del pipeline |
 | Inicio/Fin_Deteccion_Caras | TIMESTAMP | Tiempos de la fase de deteccion |
@@ -252,6 +254,7 @@ Flujo de referencia:
 |---|---|---|
 | GUID_Solicitud | VARCHAR FK | Referencia a la solicitud |
 | Id_Imagen | INT | Indice de la cara dentro de la solicitud |
+| URL_Imagen | VARCHAR | Ruta en MinIO del recorte de la cara |
 | Mayor_18 | BOOLEAN | True si adulto, False si menor |
 | score | DECIMAL | Confianza de la prediccion (0.0 - 1.0) |
 | Imagen_X | INT | Coordenada X del bounding box |

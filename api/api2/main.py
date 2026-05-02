@@ -199,7 +199,7 @@ def download_image(guid: str):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT url_imagen_terminada FROM Solicitud WHERE guid_solicitud = %s AND estado = 'COMPLETED'",
+                "SELECT url_imagen_terminada FROM Solicitud WHERE guid_solicitud = %s AND estado = 'COMPLETADA'",
                 (guid,),
             )
             row = cur.fetchone()
@@ -225,7 +225,7 @@ def consultar_solicitud(guid: str):
                 """
                 SELECT
                     GUID_Solicitud, URL_Imagen_Original, URL_Imagen_Terminada,
-                    Estado,
+                    URL_Imagen_Marcos, Estado,
                     Inicio_Solicitud, Fin_Solicitud,
                     Inicio_Deteccion_Caras, Fin_Deteccion_Caras,
                     Inicio_Edad, Fin_edad,
@@ -270,10 +270,50 @@ def consultar_solicitud(guid: str):
     if any(c.get("score") is not None and c["score"] < 0 for c in caras):
         solicitud["age_detection_warning"] = True
 
-    if solicitud["estado"] == "COMPLETED" and solicitud.get("url_imagen_terminada"):
-        base = os.getenv("PUBLIC_BASE_URL", "http://localhost:8002")
-        solicitud["download_url"] = f"{base.rstrip('/')}/download/{solicitud['guid_solicitud']}"
+    base = os.getenv("PUBLIC_BASE_URL", "http://localhost:8002")
+    if solicitud["estado"] == "COMPLETADA":
+        if solicitud.get("url_imagen_terminada"):
+            solicitud["download_url"] = f"{base.rstrip('/')}/download/{solicitud['guid_solicitud']}"
+        if solicitud.get("url_imagen_marcos"):
+            solicitud["marcos_url"] = f"{base.rstrip('/')}/solicitudes/{solicitud['guid_solicitud']}/marcos"
     else:
         solicitud.pop("url_imagen_terminada", None)
+        solicitud.pop("url_imagen_marcos", None)
 
     return solicitud
+
+
+@app.get("/solicitudes/{guid}/marcos")
+def get_imagen_marcos(guid: str):
+    """Devuelve la imagen original con bounding boxes y etiquetas sobre cada cara."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT url_imagen_marcos FROM Solicitud WHERE guid_solicitud = %s",
+                (guid,),
+            )
+            row = cur.fetchone()
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="Imagen con marcos no disponible.")
+
+    bucket, object_key = row[0].split("/", 1)
+    response = minio_client.get_object(bucket, object_key)
+    return StreamingResponse(response, media_type="image/jpeg")
+
+
+@app.get("/solicitudes/{guid}/caras/{id_imagen}")
+def get_cara(guid: str, id_imagen: int):
+    """Devuelve el recorte de una cara individual."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT url_imagen FROM Imagenes WHERE guid_solicitud = %s AND id_imagen = %s",
+                (guid, id_imagen),
+            )
+            row = cur.fetchone()
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail=f"Cara {id_imagen} no encontrada para solicitud '{guid}'.")
+
+    bucket, object_key = row[0].split("/", 1)
+    response = minio_client.get_object(bucket, object_key)
+    return StreamingResponse(response, media_type="image/jpeg")

@@ -366,7 +366,7 @@
       renderStages(data);
       drawFaces(data.caras || []);
 
-      if (data.estado === 'COMPLETED') {
+      if (data.estado === 'COMPLETADA') {
         clearInterval(pollTimer);
         setStatus('');
         showResult(data);
