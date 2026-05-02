@@ -18,7 +18,10 @@
       "PowerShell(docker exec face-detection env)",
       "Bash(python -c \"import torch; print\\('PyTorch', torch.__version__\\); print\\('CUDA disponible:', torch.cuda.is_available\\(\\)\\); print\\('CPU threads:', torch.get_num_threads\\(\\)\\)\")",
       "Bash(nvidia-smi)",
-      "Bash(python -c \"import torch; print\\('torch:', torch.__version__\\); print\\('CUDA disponible:', torch.cuda.is_available\\(\\)\\); print\\('CUDA version:', torch.version.cuda\\)\")"
+      "Bash(python -c \"import torch; print\\('torch:', torch.__version__\\); print\\('CUDA disponible:', torch.cuda.is_available\\(\\)\\); print\\('CUDA version:', torch.version.cuda\\)\")",
+      "Bash(python -m pytest tests/unit/ -q)",
+      "Bash(pip install *)",
+      "PowerShell(python -m pytest tests/unit/ -q 2>&1)"
     ]
   }
 }

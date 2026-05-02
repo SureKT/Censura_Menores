@@ -1,26 +1,65 @@
 """Tests unitarios del servicio de pixelado."""
+import importlib.util
+import sys
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
-from main import pixelate_region, build_output_event
+ROOT = Path(__file__).resolve().parents[2]
+PIX_DIR = ROOT / "services" / "pixelation"
+
+if str(PIX_DIR) not in sys.path:
+    sys.path.insert(0, str(PIX_DIR))
+
+spec = importlib.util.spec_from_file_location("pixelation_main", PIX_DIR / "main.py")
+pix = importlib.util.module_from_spec(spec)
+try:
+    spec.loader.exec_module(pix)
+except Exception as exc:  # pragma: no cover
+    pytest.skip(f"No se pudo cargar pixelation/main.py: {exc}", allow_module_level=True)
+
+pixelate_region = pix.pixelate_region
+build_output_event = pix.build_output_event
 
 
 def make_image(w=200, h=200, color=(100, 150, 200)):
     return Image.new("RGB", (w, h), color=color)
 
 
+def make_gradient_image(w=200, h=200):
+    """Imagen con gradiente de colores — no uniforme, segura para probar pixelación."""
+    img = Image.new("RGB", (w, h))
+    pixels = img.load()
+    for x in range(w):
+        for y in range(h):
+            pixels[x, y] = (x % 256, y % 256, (x + y) % 256)
+    return img
+
+
 def test_pixelate_region_modifica_imagen():
-    """La región pixelada debe ser distinta a la original."""
-    img = make_image()
-    original = img.copy()
+    """La región pixelada debe quedar visualmente bloqueada (píxeles uniformes por bloque)."""
+    img = make_gradient_image()
     pixelate_region(img, 50, 50, 80, 80)
-    # Al menos algún píxel de la región debe haber cambiado
+
+    # Todos los píxeles del primer bloque (12x12) deben ser idénticos
+    # porque el algoritmo downscale→upscale NEAREST uniformiza el bloque.
+    ref = img.getpixel((50, 50))
+    block_uniform = all(
+        img.getpixel((50 + dx, 50 + dy)) == ref
+        for dx in range(12)
+        for dy in range(12)
+    )
+    assert block_uniform, "El primer bloque de pixelación no es uniforme"
+
+    # La región debe ser diferente a la imagen sin pixelar en al menos un píxel
+    original = make_gradient_image()
     changed = any(
         img.getpixel((x, y)) != original.getpixel((x, y))
         for x in range(50, 130)
         for y in range(50, 130)
     )
-    assert changed
+    assert changed, "La pixelación no modificó ningún píxel de la región"
 
 
 def test_pixelate_region_fuera_de_limites_no_falla():

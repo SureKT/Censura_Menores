@@ -16,6 +16,20 @@ from minio import Minio
 
 
 APP_NAME = "api-ingesta"
+
+# Magic bytes de los formatos de imagen aceptados
+_IMAGE_SIGNATURES = [
+    b"\xff\xd8\xff",        # JPEG
+    b"\x89PNG\r\n\x1a\n",  # PNG
+    b"GIF87a",              # GIF87
+    b"GIF89a",              # GIF89
+    b"RIFF",                # WebP (RIFF....WEBP)
+    b"BM",                  # BMP
+]
+
+
+def _is_real_image(data: bytes) -> bool:
+    return any(data.startswith(sig) for sig in _IMAGE_SIGNATURES)
 OUTPUT_TOPIC = "cmd.face_detection"
 REALTIME_TOPIC = "cmd.realtime.classification"
 MAX_REALTIME_BYTES = 300 * 1024  # 300 KB por crop de cara
@@ -127,6 +141,8 @@ async def upload_image(file: UploadFile = File(...)) -> dict:
     max_bytes = int(os.getenv("MAX_IMAGE_BYTES", str(10 * 1024 * 1024)))
     if len(content) > max_bytes:
         raise HTTPException(status_code=413, detail=f"Imagen demasiado grande (máx {max_bytes // (1024*1024)} MB).")
+    if not _is_real_image(content):
+        raise HTTPException(status_code=400, detail="El contenido del archivo no es una imagen válida.")
 
     # 1. Generar IDs
     request_id = str(uuid.uuid4())
@@ -219,10 +235,12 @@ async def submit_realtime_face(
             status_code=413,
             detail=f"Crop demasiado grande (max {MAX_REALTIME_BYTES // 1024} KB).",
         )
+    if not _is_real_image(content):
+        raise HTTPException(status_code=400, detail="El contenido del crop no es una imagen válida.")
 
     image_b64 = base64.b64encode(content).decode("ascii")
     cmd = build_realtime_command(session_id, face_token, image_b64)
-    producer.send(REALTIME_TOPIC, cmd)
+    producer.send(REALTIME_TOPIC, cmd).get(timeout=10)
 
     return {
         "accepted": True,

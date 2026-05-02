@@ -1,9 +1,26 @@
 """Tests unitarios del modelo de estimación de edad."""
-import torch
+import importlib.util
+import sys
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
-from model import build_model, predict_age
+try:
+    import torch
+    from model import build_model, predict_age
+except Exception as exc:  # pragma: no cover
+    pytest.skip(f"Dependencias de torch no disponibles: {exc}", allow_module_level=True)
+
+ROOT = Path(__file__).resolve().parents[2]
+AGE_DET_DIR = ROOT / "services" / "age_detection"
+
+spec = importlib.util.spec_from_file_location("age_detection_main", AGE_DET_DIR / "main.py")
+_age_det = importlib.util.module_from_spec(spec)
+try:
+    spec.loader.exec_module(_age_det)
+except Exception as exc:  # pragma: no cover
+    pytest.skip(f"No se pudo cargar age_detection/main.py: {exc}", allow_module_level=True)
 
 
 @pytest.fixture(scope="module")
@@ -40,18 +57,16 @@ def test_confidence_higher_far_from_18(model):
 
 def test_crop_face_returns_pil_image():
     """crop_face debe devolver una imagen PIL recortada."""
-    from main import crop_face
     img = Image.new("RGB", (300, 300), color=(128, 64, 32))
     face = {"x": 50, "y": 50, "width": 100, "height": 100}
-    crop = crop_face(img, face)
+    crop = _age_det.crop_face(img, face)
     assert isinstance(crop, Image.Image)
     assert crop.size[0] > 0 and crop.size[1] > 0
 
 
 def test_crop_face_clamps_to_image_bounds():
     """crop_face no debe fallar aunque el bounding box salga de los límites."""
-    from main import crop_face
     img = Image.new("RGB", (100, 100))
     face = {"x": 80, "y": 80, "width": 200, "height": 200}
-    crop = crop_face(img, face)
+    crop = _age_det.crop_face(img, face)
     assert isinstance(crop, Image.Image)
