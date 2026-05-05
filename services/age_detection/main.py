@@ -1,5 +1,6 @@
 import io
 import json
+import math
 import os
 import time
 import uuid
@@ -11,7 +12,7 @@ from PIL import Image
 from torchvision import transforms
 from kafka import KafkaConsumer, KafkaProducer
 
-from model import build_model, predict_age
+from model import build_model
 
 
 APP_NAME = "age-detection"
@@ -20,11 +21,70 @@ OUTPUT_TOPIC = "evt.age_detection.completed"
 DLQ_TOPIC   = "events.dead_letter"
 GROUP_ID = "age-detection-group"
 
-TRANSFORM = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+# ── Configuracion de inferencia ───────────────────────────────────────────────
+# Umbral conservador: clasificar como menor si edad predicha < MINOR_THRESHOLD.
+# 22 en lugar de 18 añade margen de seguridad frente a subestimaciones del modelo.
+MINOR_THRESHOLD = int(os.getenv("MINOR_THRESHOLD", "22"))
+
+# Test-Time Augmentation: promedia N pasadas con distintas transformaciones.
+# Reduce la varianza de la prediccion en imagenes dificiles (angulo, iluminacion).
+TTA_PASSES = int(os.getenv("TTA_PASSES", "5"))
+
+_MEAN = [0.485, 0.456, 0.406]
+_STD  = [0.229, 0.224, 0.225]
+
+# Las 5 transformaciones TTA — de menor a mayor perturbacion
+_TTA_TRANSFORMS = [
+    transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(_MEAN, _STD),
+    ]),
+    transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(p=1.0),
+        transforms.ToTensor(),
+        transforms.Normalize(_MEAN, _STD),
+    ]),
+    transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(_MEAN, _STD),
+    ]),
+    transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ColorJitter(brightness=0.2, contrast=0.1),
+        transforms.ToTensor(),
+        transforms.Normalize(_MEAN, _STD),
+    ]),
+    transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.Grayscale(num_output_channels=3),
+        transforms.ToTensor(),
+        transforms.Normalize(_MEAN, _STD),
+    ]),
+]
+
+# Transform para inferencia sin TTA (TTA_PASSES=1)
+TRANSFORM = _TTA_TRANSFORMS[0]
+
+
+def predict_age_tta(model: torch.nn.Module, pil_crop: Image.Image) -> tuple[int, float]:
+    """
+    Predice la edad promediando TTA_PASSES augmentaciones distintas.
+    Con TTA_PASSES=1 equivale a inferencia estandar (sin overhead).
+    """
+    raws = []
+    passes = min(TTA_PASSES, len(_TTA_TRANSFORMS))
+    for t in _TTA_TRANSFORMS[:passes]:
+        tensor = t(pil_crop).unsqueeze(0)
+        with torch.no_grad():
+            raws.append(model(tensor).squeeze().item())
+    raw_mean = sum(raws) / len(raws)
+    age = int(max(0, min(120, round(raw_mean))))
+    confidence = round(1.0 / (1.0 + math.exp(-abs(age - MINOR_THRESHOLD) / 4.0)), 4)
+    return age, confidence
 
 
 def send_to_dlq(producer, original_msg: dict, error: Exception):
@@ -95,9 +155,8 @@ def process_message(cmd: dict, model, minio_client: Minio) -> list[dict]:
         if model is None:
             results.append({**face, "estimated_age": 30, "is_minor": False, "confidence": 0.0})
         else:
-            tensor = TRANSFORM(crop).unsqueeze(0)
-            age, confidence = predict_age(model, tensor)
-            results.append({**face, "estimated_age": age, "is_minor": age < 18, "confidence": confidence})
+            age, confidence = predict_age_tta(model, crop)
+            results.append({**face, "estimated_age": age, "is_minor": age < MINOR_THRESHOLD, "confidence": confidence})
     return results
 
 
@@ -129,6 +188,7 @@ def run():
     print("[age_detection] Cargando modelo...")
     model = load_model(model_path)
     print(f"[age_detection] Modelo {'cargado' if model else 'NO cargado, usando fallback'}.")
+    print(f"[age_detection] MINOR_THRESHOLD={MINOR_THRESHOLD}  TTA_PASSES={TTA_PASSES}")
 
     minio_client = create_minio_client()
 

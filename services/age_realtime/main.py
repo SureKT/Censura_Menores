@@ -28,6 +28,10 @@ OUTPUT_TOPIC = "evt.realtime.classification.completed"
 DLQ_TOPIC = "events.dead_letter"
 GROUP_ID = "age-realtime-group"
 
+# Mismo umbral conservador que el servicio batch.
+# Sin TTA para mantener la latencia baja en tiempo real.
+MINOR_THRESHOLD = int(os.getenv("MINOR_THRESHOLD", "22"))
+
 TRANSFORM = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -72,7 +76,7 @@ def classify(image_b64: str, model) -> tuple[int, bool, float]:
         return 30, False, 0.0
     tensor = TRANSFORM(img).unsqueeze(0)
     age, confidence = predict_age(model, tensor)
-    return age, age < 18, confidence
+    return age, age < MINOR_THRESHOLD, confidence
 
 
 def build_output_event(cmd: dict, age: int, is_minor: bool, confidence: float) -> dict:

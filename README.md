@@ -31,7 +31,7 @@ docker compose down
 ## Estructura del proyecto
 
 ```text
-Censura_Menores/
+Proyecto-Imagenes/
   docker-compose.yml
   README.md
   AGENTS.md
@@ -40,24 +40,29 @@ Censura_Menores/
     evt.storage.completed.v1.schema.json
     events.dead_letter.v1.schema.json
   scripts/
-    smoke-test.ps1
+    smoke-test.ps1          <- valida infraestructura y topics Kafka
+    manage_models.ps1       <- gestiona versiones del modelo de edad
   db/
     init.sql
   dataset/
-    face_age/          <- dataset Kaggle frabbisw/facial-age (carpetas = edad)
+    face_age/               <- dataset Kaggle frabbisw/facial-age (carpetas = edad)
   api/
-    api1/              <- API de ingesta (FastAPI, puerto 8001)
-    api2/              <- API de consulta (FastAPI, puerto 8002)
+    api1/                   <- API de ingesta (FastAPI, puerto 8001)
+    api2/                   <- API de consulta (FastAPI, puerto 8002)
   orquestadores/
-    o2/                <- Orquestador de analisis
-    o3/                <- Orquestador de decision
-    o4/                <- Orquestador de finalizacion
+    o2/                     <- Orquestador de analisis
+    o3/                     <- Orquestador de decision
+    o4/                     <- Orquestador de finalizacion
   services/
-    face_detection/    <- Deteccion de caras con YOLOv8-face
-    age_detection/     <- Estimacion de edad con MobileNetV2 (PyTorch)
-    pixelation/        <- Pixelado de rostros de menores
+    face_detection/         <- Deteccion de caras con YOLOv8-face
+    age_detection/          <- Estimacion de edad con MobileNetV2 (PyTorch)
+      models/               <- historial de versiones del modelo (.pth + registry.json)
+    age_realtime/           <- variante ligera para camara en vivo (sin MinIO/Postgres)
+    pixelation/             <- Pixelado de rostros de menores + imagen con marcos
   frontend/
-    index.html         <- Interfaz web (puerto 3000)
+    index.html              <- Interfaz web foto estatica (puerto 3000)
+    realtime.html           <- Interfaz camara en vivo
+    realtime.js             <- logica de deteccion y pixelado en tiempo real
 ```
 
 ## Descripcion de servicios
@@ -84,9 +89,9 @@ Censura_Menores/
 ### Servicios de procesamiento
 
 - `face-detection`: consume `cmd.face_detection`, descarga la imagen de MinIO, ejecuta el modelo YOLOv8-face y publica `evt.face_detection.completed` con las coordenadas `(x, y, width, height)` de cada rostro detectado.
-- `age-detection`: consume `cmd.age_detection`, descarga la imagen de MinIO, recorta cada cara usando las coordenadas del paso anterior y estima la edad con MobileNetV2 (PyTorch). Publica `evt.age_detection.completed` con `estimated_age`, `is_minor` y `confidence` por cara.
-- `pixelation`: consume `cmd.pixelation`, descarga la imagen original de MinIO, genera dos versiones: la imagen pixelada (menores) y la imagen con bounding boxes + etiquetas (edad/confianza) sobre todas las caras. Sube ambas al bucket `imagenes-procesadas` y publica `evt.pixelation.completed`.
-- `age-realtime`: variante ligera de `age-detection` para el flujo de cámara en vivo. Consume `cmd.realtime.classification` (crops ya recortados en base64, sin MinIO ni PostgreSQL), ejecuta MobileNetV2 y publica `evt.realtime.classification.completed`.
+- `age-detection`: consume `cmd.age_detection`, descarga la imagen de MinIO, recorta cada cara (padding 10 %) y estima la edad con MobileNetV2 + TTA (5 augmentaciones). Clasifica como menor si `edad < MINOR_THRESHOLD` (default 22). Publica `evt.age_detection.completed` con `estimated_age`, `is_minor` y `confidence` por cara.
+- `pixelation`: consume `cmd.pixelation`, descarga la imagen original de MinIO y genera dos versiones: (1) imagen pixelada con los rostros de menores censurados, (2) imagen con bounding boxes y etiquetas de edad/confianza sobre todas las caras (fuente y grosor de borde escalados dinámicamente al ancho de la imagen). Sube ambas al bucket `imagenes-procesadas` y publica `evt.pixelation.completed`.
+- `age-realtime`: variante ligera de `age-detection` para el flujo de cámara en vivo. Consume `cmd.realtime.classification` (crops ya recortados en base64, sin MinIO ni PostgreSQL), ejecuta MobileNetV2 sin TTA (latencia baja) con el mismo umbral `MINOR_THRESHOLD=22`. Publica `evt.realtime.classification.completed`.
 
 ## Modo cámara en vivo
 
@@ -100,8 +105,8 @@ Navegador                          Backend
 getUserMedia → <video>
 BlazeFace (TF.js) @ 60fps
 Tracker IoU → cara1, cara2…
-   │ cara NUEVA                   ┌─────────────────────────────┐
-   └─► POST /realtime/faces ─────►│ API1 ─► cmd.realtime.classif│
+   │ cara NUEVA                    ┌─────────────────────────────┐
+   └─► POST /realtime/faces ─────► │ API1 ─► cmd.realtime.classif│
                                    │         │                   │
                                    │         ▼                   │
                                    │  age-realtime (MobileNetV2) │
@@ -141,17 +146,24 @@ El pipeline clásico (`cmd.face_detection` → … → `evt.storage.completed`) 
 
 ### Frontend
 
-Interfaz web servida con `python -m http.server 3000`. Permite subir una imagen, ver el progreso del pipeline en tiempo real (polling a API2 cada 1 segundo), visualizar los bounding boxes de cada cara con etiqueta Menor/Adulto y descargar la imagen procesada.
+Servido por Nginx en el puerto 3000. Dos vistas:
+
+- **`index.html`** — sube una foto, muestra progreso del pipeline en tiempo real (polling a API2 cada segundo), y al terminar presenta un toggle **Pixelada / Con marcos** para alternar entre la imagen con menores pixelados y la imagen anotada con bounding boxes y etiquetas de edad. No dibuja nada en canvas sobre el resultado final: usa directamente las imágenes generadas por el backend.
+- **`realtime.html`** — cámara en vivo. Usa BlazeFace (TF.js) para detectar caras en el navegador a ~15fps, envía un crop por cara nueva al backend via SSE y pixela en canvas las caras clasificadas como menores.
 
 ## Red neuronal de estimacion de edad
 
 ### Arquitectura
 
 - Base: **MobileNetV2** preentrenado en ImageNet.
-- Cabeza: `Dropout(0.2)` + `Linear(1280 → 1)` (regresion de edad).
-- Entrada: recorte de cara 224x224 con 10% de padding alrededor del bounding box.
-- Salida: edad estimada (entero 0-120) y confianza (`sigmoid(|edad - 18| / 4)`).
-- Umbral: si `edad < 18` → menor.
+- Cabeza: `Dropout(0.3)` → `Linear(1280 → 256)` → `ReLU` → `Dropout(0.2)` → `Linear(256 → 1)` (regresion de edad).
+- Entrada: recorte de cara 224×224 con 10 % de padding alrededor del bounding box.
+- Salida: edad estimada (entero 0-120) y confianza (`sigmoid(|edad - umbral| / 4)`).
+- **Umbral**: `edad < MINOR_THRESHOLD` → menor (por defecto 22; configurable por variable de entorno).
+
+### Inferencia robusta
+
+El servicio `age-detection` aplica **Test-Time Augmentation (TTA)**: promedia 5 predicciones con distintas transformaciones (original, flip horizontal, crop central, jitter de brillo, escala de grises). Reduce la varianza en imágenes difíciles (ángulo, iluminación, baja resolución). Configurable con `TTA_PASSES` (env var; por defecto 5). El servicio `age-realtime` no usa TTA para mantener latencia baja.
 
 ### Dataset
 
@@ -160,36 +172,64 @@ Estructura: carpetas numericas (`001/`, `002/`, ..., `110/`) donde el nombre es 
 
 ### Entrenamiento
 
-Instalar dependencias de entrenamiento:
+Instalar dependencias:
 ```bash
 # Con GPU NVIDIA (recomendado — ~10x mas rapido que CPU)
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --upgrade
 pip install -r services/age_detection/requirements-train.txt
 
-# Solo CPU (lento)
+# Solo CPU
 pip install -r services/age_detection/requirements-train.txt
 ```
 
 Entrenar:
 ```bash
 cd services/age_detection
-python train.py --dataset ../../dataset/face_age --epochs 20
+python train.py --dataset ../../dataset/face_age --epochs 30 --desc "descripcion_version"
 ```
 
 Opciones disponibles:
 ```
---dataset        Ruta al dataset (default: ../../dataset/face_age)
---output         Ruta de salida del modelo (default: age_model.pth)
---epochs         Epocas totales fase1+fase2 (default: 20)
---batch          Tamano de batch (default: 32)
---lr             Learning rate del clasificador; backbone usa lr*0.1 (default: 0.001)
---freeze-epochs  Epocas con backbone congelado antes del fine-tuning (default: 5)
+--dataset          Ruta al dataset (default: ../../dataset/face_age)
+--output           Ruta del modelo activo (default: age_model.pth)
+--epochs           Epocas totales fase1+fase2 (default: 30)
+--batch            Tamano de batch (default: 32)
+--lr               Learning rate del clasificador; backbone usa lr*0.1 (default: 0.001)
+--freeze-epochs    Epocas con backbone congelado (default: 8)
+--desc             Descripcion corta para el registro de versiones
+--minor-threshold  Umbral que se registra en el historial (default: 22)
 ```
 
-El modelo entrenado se guarda como `services/age_detection/age_model.pth`. Tras el entrenamiento hay que reconstruir el contenedor:
+**Pérdida:** `BoundaryAwareLoss` = `HuberLoss(delta=3) + 0.7 · BCE(18)`. El término BCE penaliza especialmente los errores que invierten la clasificación menor/adulto.
+
+**Sampler:** `WeightedRandomSampler` con boost para las franjas de mayor riesgo:
+| Franja | Boost |
+|---|---|
+| 0-4 años | ×1.5 |
+| 5-9 años | ×1.5 |
+| 10-12 años | ×1.5 |
+| 13-17 años | ×2.0 |
+| 18-20 años | ×1.5 |
+
+Al terminar, el script guarda la versión en `models/` y actualiza `registry.json`. Reconstruir el contenedor para aplicar el nuevo modelo:
 ```bash
 docker compose up -d --build age-detection
 ```
+
+### Versionado de modelos
+
+```powershell
+# Ver todas las versiones
+.\scripts\manage_models.ps1 list
+
+# Detalle de una version
+.\scripts\manage_models.ps1 info v1
+
+# Activar una version (copia el .pth y reinicia contenedores)
+.\scripts\manage_models.ps1 use v1
+```
+
+El historial se almacena en `services/age_detection/models/registry.json`. Cada entrada incluye id, MAE de validación, alpha, umbral y descripción.
 
 ### Prueba manual del modelo
 
@@ -203,7 +243,7 @@ python test.py foto.jpg
 python test.py foto1.jpg foto2.png carpeta/
 
 # Modelo alternativo
-python test.py foto.jpg --model otro_modelo.pth
+python test.py foto.jpg --model models/v1_20260505_baseline.pth
 ```
 
 ## Topics y flujo de eventos
@@ -231,6 +271,14 @@ Flujo de referencia:
 8. O4 marca la solicitud como `COMPLETADA`, guarda URL imagen terminada y URL imagen con marcos.
 9. Cliente consulta resultado via `GET /solicitudes/{guid}` (API2).
 10. Errores no recuperables se envian a `events.dead_letter`.
+
+## Variables de entorno relevantes
+
+| Variable | Servicio | Default | Descripcion |
+|---|---|---|---|
+| `MINOR_THRESHOLD` | age-detection, age-realtime | `22` | Edad maxima para clasificar como menor. Valor conservador (margen de 4 años sobre el límite legal de 18). |
+| `TTA_PASSES` | age-detection | `5` | Número de augmentaciones TTA a promediar en inferencia (1 = sin TTA). |
+| `MODEL_PATH` | age-detection, age-realtime | `age_model.pth` | Ruta al fichero `.pth` del modelo activo. |
 
 ## Esquema de la base de datos
 

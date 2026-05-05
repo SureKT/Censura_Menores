@@ -233,6 +233,8 @@ services:
       MINIO_SECRET_KEY: minioadmin123
       MINIO_SECURE: "false"
       MODEL_PATH: age_model.pth
+      MINOR_THRESHOLD: "22"   # margen de seguridad: age < 22 → menor
+      TTA_PASSES: "5"         # promedia 5 augmentaciones para reducir varianza
     networks:
       - bda-net
 
@@ -329,6 +331,7 @@ services:
       PYTHONUNBUFFERED: "1"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MODEL_PATH: /models/age_model.pth
+      MINOR_THRESHOLD: "22"   # mismo umbral que el servicio batch
     volumes:
       # Reutiliza el mismo modelo entrenado en age_detection (si existe)
       - ./services/age_detection:/models:ro

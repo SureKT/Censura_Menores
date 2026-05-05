@@ -1,0 +1,26 @@
+{
+  "versions": [
+    {
+      "id": "v1",
+      "filename": "v1_20260505_baseline.pth",
+      "date": "2026-05-05",
+      "description": "Modelo inicial - MobileNetV2, alpha=0.3, umbral=18",
+      "mae_val": null,
+      "alpha": 0.3,
+      "minor_threshold": 18,
+      "epochs": 25,
+      "active": false
+    },
+    {
+      "id": "v2",
+      "filename": "v2_20260505_alpha07_boost_ninos.pth",
+      "date": "2026-05-05",
+      "description": "alpha07_boost_ninos",
+      "mae_val": 4.51,
+      "alpha": 0.7,
+      "minor_threshold": 22,
+      "epochs": 30,
+      "active": true
+    }
+  ]
+}

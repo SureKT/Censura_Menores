@@ -5,19 +5,25 @@ Mejoras respecto a la version anterior:
   - Aumento de datos moderado (rotacion, jitter, erasing) sin distorsiones agresivas
   - Split estratificado por franja de edad
   - WeightedRandomSampler para compensar el desbalance adultos/menores
-  - BoundaryAwareLoss: HuberLoss + penalizacion en el umbral 18 anos
+    · Boost para ninos muy pequenos (0-9 anos) ademas del rango de frontera
+  - BoundaryAwareLoss: HuberLoss + penalizacion BCE en el umbral 18 anos (alpha=0.7)
+    · Alpha alto prioriza la clasificacion menor/adulto sobre el error de regresion
   - Entrenamiento en 2 fases: backbone congelado (8 epocas) -> fine-tuning completo
   - Scheduler CosineAnnealingLR + AdamW con LR diferenciado
   - AMP (FP16) en GPU con gradient clipping (max_norm=5)
   - Barra de progreso por batch, tiempos por epoca, normas de gradiente
+  - Guardado versionado en models/ con registry.json para poder hacer rollback
 
 Uso:
-    python train.py --dataset ../../dataset/face_age --epochs 25
+    python train.py --dataset ../../dataset/face_age --epochs 30 --desc "v2_alpha07_boost"
 """
 import argparse
+import json
 import random
+import shutil
 import time
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 import torch
@@ -144,11 +150,19 @@ def stratified_split(
 def make_weighted_sampler(samples: list[tuple[Path, int]]) -> WeightedRandomSampler:
     """
     Sobremuestra las franjas de edad infrarrepresentadas.
-    Las franjas 10-17 y 18-20 reciben peso extra por estar cerca del umbral de decision.
+    - Bins 0 y 1 (0-9 anos): boost x1.5 — ninos pequenos son los mas criticos
+      y su apariencia varia mucho entre los 1 y los 9 anos.
+    - Bins 2-4 (10-20 anos): boost adicional por estar cerca del umbral de decision.
     """
     bins = [age_bin(age) for _, age in samples]
     bin_counts = Counter(bins)
-    boundary_boost = {2: 1.5, 3: 2.0, 4: 1.5}  # bins 10-12, 13-17, 18-20
+    boundary_boost = {
+        0: 1.5,   # 0-4 anos: ninos muy pequenos — facies muy distintas, criticos
+        1: 1.5,   # 5-9 anos: ninos pequenos
+        2: 1.5,   # 10-12 anos
+        3: 2.0,   # 13-17 anos: menores proximos al umbral
+        4: 1.5,   # 18-20 anos: adultos jovenes proximos al umbral
+    }
     weights = [
         boundary_boost.get(b, 1.0) / bin_counts[b]
         for b in bins
@@ -166,7 +180,7 @@ class BoundaryAwareLoss(nn.Module):
     clasificacion menor/adulto (p.ej. predecir 19 cuando la edad real es 16).
     Devuelve (total, huber, boundary) para poder mostrar cada componente.
     """
-    def __init__(self, boundary: float = 18.0, alpha: float = 0.3):
+    def __init__(self, boundary: float = 18.0, alpha: float = 0.7):
         super().__init__()
         self.boundary = boundary
         self.alpha = alpha
@@ -316,6 +330,46 @@ def print_grad_norms(model: nn.Module):
 
 # ── Entrenamiento principal ───────────────────────────────────────────────────
 
+def _next_version_id(models_dir: Path) -> str:
+    """Determina el siguiente id de version leyendo registry.json."""
+    registry_path = models_dir / "registry.json"
+    if registry_path.exists():
+        data = json.loads(registry_path.read_text(encoding="utf-8"))
+        n = len(data.get("versions", [])) + 1
+    else:
+        n = 1
+    return f"v{n}"
+
+
+def _save_to_registry(models_dir: Path, version_id: str, filename: str,
+                       description: str, mae_val: float, alpha: float,
+                       minor_threshold: int, epochs: int):
+    """Añade la version al registry.json y la marca como activa."""
+    registry_path = models_dir / "registry.json"
+    if registry_path.exists():
+        data = json.loads(registry_path.read_text(encoding="utf-8"))
+    else:
+        data = {"versions": []}
+
+    # Desactivar la version anterior
+    for v in data["versions"]:
+        v["active"] = False
+
+    data["versions"].append({
+        "id":              version_id,
+        "filename":        filename,
+        "date":            date.today().isoformat(),
+        "description":     description,
+        "mae_val":         round(mae_val, 2),
+        "alpha":           alpha,
+        "minor_threshold": minor_threshold,
+        "epochs":          epochs,
+        "active":          True,
+    })
+    registry_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  registry.json actualizado → {version_id} marcado como activo.")
+
+
 def train(
     dataset_root: str,
     output_path: str,
@@ -323,6 +377,8 @@ def train(
     batch_size: int,
     lr: float,
     freeze_epochs: int,
+    description: str,
+    minor_threshold: int,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Dispositivo: {device}", end="")
@@ -356,7 +412,8 @@ def train(
     )
 
     model     = build_model().to(device)
-    criterion = BoundaryAwareLoss()
+    alpha_val = 0.7
+    criterion = BoundaryAwareLoss(alpha=alpha_val)
     scaler    = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
     t_start   = time.time()
 
@@ -419,17 +476,63 @@ def train(
     total = time.time() - t_start
     print(f"\n{'─'*80}")
     print(f"Entrenamiento finalizado en {fmt_time(total)}")
-    print(f"Mejor MAE en validacion: {best_mae:.1f} anos  →  {output_path}")
+    print(f"Mejor MAE en validacion: {best_mae:.1f} anos")
+
+    # ── Guardado versionado ───────────────────────────────────────────────────
+    models_dir   = Path(output_path).parent / "models"
+    models_dir.mkdir(exist_ok=True)
+
+    version_id   = _next_version_id(models_dir)
+    date_str     = date.today().strftime("%Y%m%d")
+    slug         = description.replace(" ", "_")[:30] if description else "entrenado"
+    versioned_fn = f"{version_id}_{date_str}_{slug}.pth"
+    versioned_path = models_dir / versioned_fn
+
+    # El mejor modelo ya está en output_path (guardado en el bucle)
+    shutil.copy2(output_path, versioned_path)
+    print(f"Modelo guardado en models/{versioned_fn}")
+
+    _save_to_registry(
+        models_dir    = models_dir,
+        version_id    = version_id,
+        filename      = versioned_fn,
+        description   = description or "sin descripcion",
+        mae_val       = best_mae,
+        alpha         = alpha_val,
+        minor_threshold = minor_threshold,
+        epochs        = epochs,
+    )
+
+    print(f"\nPara activar este modelo ejecuta:")
+    print(f"  .\\scripts\\manage_models.ps1 use {version_id}")
+    print(f"(age_model.pth ya fue actualizado durante el entrenamiento)\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Entrena el modelo de estimacion de edad")
-    parser.add_argument("--dataset",       default="../../dataset/face_age")
-    parser.add_argument("--output",        default="age_model.pth")
-    parser.add_argument("--epochs",        type=int,   default=25)
-    parser.add_argument("--batch",         type=int,   default=32)
-    parser.add_argument("--lr",            type=float, default=1e-3)
-    parser.add_argument("--freeze-epochs", type=int,   default=8)
+    parser.add_argument("--dataset",         default="../../dataset/face_age",
+                        help="Carpeta raiz del dataset (subcarpetas = edad)")
+    parser.add_argument("--output",          default="age_model.pth",
+                        help="Ruta del modelo activo (sobreescrito con el mejor checkpoint)")
+    parser.add_argument("--epochs",          type=int,   default=30,
+                        help="Total de epocas (fase1 + fase2)")
+    parser.add_argument("--batch",           type=int,   default=32)
+    parser.add_argument("--lr",              type=float, default=1e-3)
+    parser.add_argument("--freeze-epochs",   type=int,   default=8,
+                        help="Epocas con backbone congelado (fase 1)")
+    parser.add_argument("--desc",            default="",
+                        help="Descripcion corta para el registro de versiones")
+    parser.add_argument("--minor-threshold", type=int,   default=22,
+                        help="Umbral de edad para clasificar como menor (solo se registra, no afecta al entrenamiento)")
     args = parser.parse_args()
 
-    train(args.dataset, args.output, args.epochs, args.batch, args.lr, args.freeze_epochs)
+    train(
+        dataset_root    = args.dataset,
+        output_path     = args.output,
+        epochs          = args.epochs,
+        batch_size      = args.batch,
+        lr              = args.lr,
+        freeze_epochs   = args.freeze_epochs,
+        description     = args.desc,
+        minor_threshold = args.minor_threshold,
+    )
