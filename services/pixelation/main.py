@@ -47,12 +47,18 @@ def draw_annotations(image: Image.Image, faces: list[dict]) -> Image.Image:
     """Dibuja bounding boxes y etiquetas (edad + confianza) sobre una copia de la imagen."""
     annotated = image.copy()
     draw      = ImageDraw.Draw(annotated)
+
+    img_w, img_h = annotated.size
+    # Tamaño de fuente proporcional al ancho de la imagen: legible en HD y en miniaturas
+    font_size = max(14, min(36, img_w // 40))
     try:
-        font = ImageFont.load_default(size=16)
+        font = ImageFont.load_default(size=font_size)
     except TypeError:
         font = ImageFont.load_default()
 
-    img_w, img_h = annotated.size
+    # Grosor de borde proporcional
+    border_w = max(2, img_w // 400)
+
     for face in faces:
         x = int(face.get("x", 0))
         y = int(face.get("y", 0))
@@ -76,13 +82,28 @@ def draw_annotations(image: Image.Image, faces: list[dict]) -> Image.Image:
         y2 = min(img_h, y + h)
 
         # Borde doble para mejor visibilidad
-        draw.rectangle([x1, y1, x2, y2], outline=(0, 0, 0), width=4)
-        draw.rectangle([x1, y1, x2, y2], outline=color, width=2)
+        draw.rectangle([x1, y1, x2, y2], outline=(0, 0, 0), width=border_w + 2)
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=border_w)
 
-        # Fondo semitransparente para el texto
-        text_y = max(0, y1 - 20)
-        draw.rectangle([x1, text_y, x1 + len(label) * 8 + 4, text_y + 18], fill=(0, 0, 0))
-        draw.text((x1 + 2, text_y + 1), label, fill=color, font=font)
+        # Fondo del texto con dimensiones exactas via getbbox
+        try:
+            bbox = font.getbbox(label)
+            txt_w = bbox[2] - bbox[0]
+            txt_h = bbox[3] - bbox[1]
+        except AttributeError:
+            txt_w = len(label) * (font_size // 2)
+            txt_h = font_size
+
+        pad   = max(3, font_size // 6)
+        text_y = y1 - txt_h - pad * 2
+        if text_y < 0:
+            text_y = y2  # poner debajo del marco si no cabe arriba
+
+        draw.rectangle(
+            [x1, text_y, x1 + txt_w + pad * 2, text_y + txt_h + pad * 2],
+            fill=(0, 0, 0),
+        )
+        draw.text((x1 + pad, text_y + pad), label, fill=color, font=font)
 
     return annotated
 

@@ -196,6 +196,24 @@
     .conf-bar   { height: 100%; border-radius: 3px; transition: width .5s ease; }
     .conf-pct   { font-variant-numeric: tabular-nums; color: var(--muted); width: 34px; text-align: right; flex-shrink: 0; }
 
+    /* ── Toggle vista ───────────────────────────── */
+    .btn-view {
+      flex: 1;
+      padding: 7px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .btn-view.active {
+      background: var(--text);
+      color: white;
+      border-color: var(--text);
+    }
+
     /* ── Descarga ────────────────────────────────── */
     .result-block {
       border-top: 1px solid var(--border);
@@ -290,6 +308,10 @@
 
       <!-- Descarga -->
       <div class="result-block" id="resultBlock" style="display:none">
+        <div style="display:flex; gap:8px; margin-bottom:4px">
+          <button class="btn-view active" id="btnViewPixelada" onclick="switchView('pixelada')">Pixelada</button>
+          <button class="btn-view" id="btnViewMarcos" onclick="switchView('marcos')">Con marcos</button>
+        </div>
         <a class="btn-download" id="downloadBtn" href="#" download>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -415,18 +437,37 @@
   }
 
   // ── Mostrar resultado final ──────────────────────
+  let _downloadUrl = null;
+  let _marcosUrl   = null;
+
   function showResult(data) {
-    if (data.download_url) {
-      const img = document.getElementById('imgPreviewSplit');
-      // Asignar onload ANTES de cambiar src (evita race condition con caché)
-      img.onload = () => drawFaces(lastCaras);
-      img.src = data.download_url;
-      // Si ya está en caché, onload no dispara — forzamos el redibujado
-      if (img.complete && img.naturalWidth) drawFaces(lastCaras);
-      document.getElementById('downloadBtn').href = data.download_url;
-    }
+    _downloadUrl = data.download_url || null;
+    _marcosUrl   = data.marcos_url   || null;
+
+    // Limpiar canvas — el pixelado ya está en la imagen del backend
+    const canvas = document.getElementById('facesCanvasSplit');
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('legend').style.display = 'none';
+
+    // Mostrar imagen pixelada por defecto
+    if (_downloadUrl) switchView('pixelada');
+
+    // Ocultar botón de marcos si el backend no lo generó
+    document.getElementById('btnViewMarcos').style.display = _marcosUrl ? '' : 'none';
+
+    document.getElementById('downloadBtn').href = _downloadUrl || '#';
     document.getElementById('resultBlock').style.display = 'flex';
     renderResults(data);
+  }
+
+  function switchView(tipo) {
+    const img = document.getElementById('imgPreviewSplit');
+    const url = tipo === 'marcos' ? _marcosUrl : _downloadUrl;
+    if (!url) return;
+    img.src = url;
+    img.style.display = 'block';
+    document.getElementById('btnViewPixelada').classList.toggle('active', tipo === 'pixelada');
+    document.getElementById('btnViewMarcos').classList.toggle('active',   tipo === 'marcos');
   }
 
   // ── Panel de resultados ──────────────────────────
@@ -545,6 +586,8 @@
     clearInterval(pollTimer);
     requestId = null;
     lastCaras = [];
+    _downloadUrl = null;
+    _marcosUrl   = null;
 
     document.getElementById('uploadOnly').style.display   = 'flex';
     document.getElementById('splitView').style.display    = 'none';
