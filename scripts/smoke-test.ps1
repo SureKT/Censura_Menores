@@ -72,8 +72,9 @@ Wait-ServiceHealthy -ServiceName "postgres"
 Wait-ServiceHealthy -ServiceName "minio"
 
 Write-Step "Verificando topics Kafka"
+# Topics reales usados por el pipeline (images.raw y cmd.storage fueron desestimados:
+# API1 actua directamente como productor de cmd.face_detection sin topic intermedio).
 $expectedTopics = @(
-    "images.raw",
     "evt.face_detection.completed",
     "evt.age_detection.completed",
     "evt.pixelation.completed",
@@ -81,7 +82,8 @@ $expectedTopics = @(
     "cmd.face_detection",
     "cmd.age_detection",
     "cmd.pixelation",
-    "cmd.storage",
+    "cmd.realtime.classification",
+    "evt.realtime.classification.completed",
     "events.dead_letter"
 )
 
@@ -119,33 +121,13 @@ if ($missing.Count -gt 0) {
 }
 Write-Host "Topics OK."
 
-Write-Step "Publicando mensaje de prueba en images.raw"
-$event = @{
-    event = @{
-        event_id      = [guid]::NewGuid().ToString()
-        event_type    = "images.raw"
-        event_version = "v1"
-        occurred_at   = (Get-Date).ToUniversalTime().ToString("o")
-        trace         = @{
-            request_id = "smoke-request-001"
-            image_id   = "smoke-image-001"
-        }
-        source        = "smoke-test-script"
-    }
-    payload = @{
-        bucket       = "imagenes-raw"
-        object_key   = "smoke/test.jpg"
-        content_type = "image/jpeg"
-        size_bytes   = 12345
-    }
-}
-
-$json = $event | ConvertTo-Json -Depth 6 -Compress
-$json | docker exec -i kafka kafka-console-producer --bootstrap-server localhost:29092 --topic images.raw | Out-Null
+Write-Step "Verificando conectividad Kafka (produce/consume en events.dead_letter)"
+$pingMsg = '{"smoke":"ping"}'
+$pingMsg | docker exec -i kafka kafka-console-producer --bootstrap-server localhost:29092 --topic events.dead_letter | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    throw "No se pudo publicar evento de prueba en images.raw."
+    throw "No se pudo publicar mensaje de prueba en Kafka."
 }
-Write-Host "Evento de prueba publicado."
+Write-Host "Kafka produce OK."
 
 Write-Step "Comprobando MinIO (health endpoint)"
 docker exec minio curl -fsS http://localhost:9000/minio/health/live | Out-Null

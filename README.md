@@ -42,6 +42,7 @@ Proyecto-Imagenes/
   scripts/
     smoke-test.ps1          <- valida infraestructura y topics Kafka
     manage_models.ps1       <- gestiona versiones del modelo de edad
+    latency-report.ps1      <- informe de latencias end-to-end desde PostgreSQL
   db/
     init.sql
   dataset/
@@ -296,6 +297,108 @@ Flujo de referencia:
 8. O4 marca la solicitud como `COMPLETADA`, guarda URL imagen terminada y URL imagen con marcos.
 9. Cliente consulta resultado via `GET /solicitudes/{guid}` (API2).
 10. Errores no recuperables se envian a `events.dead_letter`.
+
+## Decisiones de diseño relevantes
+
+### API1 absorbe la función de O1
+
+El flujo descrito en la especificación contempla un **Orquestador 1 (O1)** que consumiría el topic `images.raw` y publicaría `cmd.face_detection`. Esta funcionalidad fue consolidada en **API1** por las siguientes razones:
+
+- Elimina una hop de red y un topic intermedio innecesario.
+- API1 ya tiene acceso a MinIO y PostgreSQL en el momento de la ingesta; delegar a O1 requeriría duplicar ese acceso.
+- La especificación permite explícitamente el flujo desacoplado sin orquestador central.
+
+El topic `images.raw` **no se crea ni se usa** en el pipeline real. El único punto de entrada al bus de eventos es `cmd.face_detection`, publicado directamente por API1 tras subir la imagen a MinIO e insertar la fila en PostgreSQL.
+
+### O3 siempre pasa por Pixelation
+
+Aunque la especificación contempla un atajo directo a `cmd.storage` cuando no hay menores, O3 enruta **siempre** a `cmd.pixelation`. Motivo: el servicio Pixelation genera la imagen con marcos (bounding boxes + etiquetas de edad/confianza) sobre **todas** las caras, independientemente de si hay menores. Sin esa imagen no habría vista "Con marcos" en el frontend. El overhead es despreciable (< 50 ms para imágenes normales).
+
+---
+
+## Gestión de errores
+
+### Estrategia general
+
+Cada servicio del pipeline sigue el mismo patrón de tolerancia a fallos:
+
+| Nivel | Mecanismo |
+|---|---|
+| Conexión a Kafka | Reintento con backoff (12 intentos × 5 s) al arrancar |
+| Procesamiento de mensaje | `try/except` por mensaje; el error no mata el consumer |
+| Error no recuperable | El mensaje se reenvía a `events.dead_letter` con causa y mensaje original |
+| Caída del contenedor | `restart: unless-stopped` en docker-compose — Docker reinicia automáticamente |
+
+### Qué ocurre si falla cada servicio
+
+| Servicio | Consecuencia | Recuperación |
+|---|---|---|
+| **kafka** | Todo el pipeline se detiene | Docker reinicia; los consumers retoman desde el último offset confirmado |
+| **api1** | No se aceptan nuevas imágenes (HTTP 503) | Reinicio automático; solicitudes en vuelo no se pierden (ya están en Kafka) |
+| **face-detection** | El mensaje queda en `cmd.face_detection` sin consumir | Al reiniciar reanuda desde ese offset; no se pierde ningún mensaje |
+| **age-detection** | Ídem en `cmd.age_detection`; fallback: todas las caras se marcan como adulto con `confidence=-1` | Reinicio automático |
+| **pixelation** | Ídem en `cmd.pixelation` | Reinicio automático |
+| **o2 / o3 / o4** | El orquestador no actualiza la BD ni publica el siguiente comando | Reinicio automático; el consumer retoma el mensaje pendiente |
+| **postgres** | Los orquestadores no pueden escribir estado | Reinicio automático con volumen persistente; no se pierden datos ya escritos |
+| **minio** | Los servicios no pueden leer/escribir imágenes | Reinicio automático con volumen persistente |
+| **api2** | El cliente no puede consultar resultados | Reinicio automático; el procesamiento en Kafka continúa sin API2 |
+
+### Dead Letter Queue
+
+El topic `events.dead_letter` recibe mensajes cuando un servicio no puede procesar un evento tras agotar los reintentos. Cada mensaje de DLQ incluye:
+- `error.type` y `error.message` — causa del fallo
+- `original_message` — el evento completo que falló
+
+Para inspeccionar mensajes en DLQ:
+```bash
+docker exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:29092 \
+  --topic events.dead_letter \
+  --from-beginning \
+  --max-messages 20
+```
+
+---
+
+## Métricas de rendimiento
+
+### Por servicio (tiempo de procesamiento)
+
+Cada servicio loguea el tiempo de procesamiento de cada evento en milisegundos:
+```
+[age_detection] req-abc → 3 caras, 1 menores (312ms)
+[pixelation]    req-abc: 1 pixelados, marcos generados → evt.pixelation.completed (87ms)
+```
+
+### Latencia end-to-end
+
+La tabla `Solicitud` almacena timestamps de inicio y fin de cada fase. Para consultar las latencias reales:
+
+```powershell
+# Últimas 20 solicitudes completadas con desglose por fase
+.\scripts\latency-report.ps1
+
+# Solo resumen agregado (media / min / max)
+.\scripts\latency-report.ps1 -Summary
+
+# Ampliar a las últimas 100
+.\scripts\latency-report.ps1 -Last 100
+```
+
+Tiempos de referencia observados en la máquina de desarrollo (CPU, sin GPU):
+
+| Fase | Tiempo típico |
+|---|---|
+| Detección de caras (YOLOv8) | 300–800 ms |
+| Estimación de edad × cara (MobileNetV2 + TTA×5) | 200–600 ms |
+| Pixelado + marcos | 50–150 ms |
+| **Total end-to-end** | **< 2 s** (1–3 caras) |
+
+### Capacidad de procesamiento múltiple
+
+Cada servicio es un **consumer group Kafka independiente**. Al lanzar múltiples instancias de un servicio se reparten las particiones automáticamente, escalando el throughput horizontalmente sin cambios de código.
+
+---
 
 ## Variables de entorno relevantes
 
