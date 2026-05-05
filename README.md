@@ -231,7 +231,32 @@ docker compose up -d --build age-detection
 
 El historial se almacena en `services/age_detection/models/registry.json`. Cada entrada incluye id, MAE de validación, alpha, umbral y descripción.
 
-### Prueba manual del modelo
+### Métricas y gráficas
+
+Genera una figura PNG con las 3 gráficas clave:
+- **Scatter predicha vs real** — precisión global y distribución de errores
+- **MAE por franja de edad** — donde falla el modelo (critico para niños pequeños)
+- **Matriz de confusión binaria** — recall de menores y falsos negativos (el error más grave)
+
+```bash
+cd services/age_detection
+
+# Modelo activo, val set (15 % del dataset)
+python metrics.py
+
+# Modelo especifico
+python metrics.py --model models/v1_20260505_baseline.pth
+
+# Todo el dataset
+python metrics.py --full-dataset
+
+# Comparar dos versiones (scatter lado a lado)
+python metrics.py --compare v1 v2
+```
+
+La imagen se guarda junto al `.pth` evaluado: `models/<nombre>_metrics.png`.
+
+### Prueba manual del modelo (imagen individual)
 
 ```bash
 cd services/age_detection
